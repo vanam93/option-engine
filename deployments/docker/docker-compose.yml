@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: option_engine
+      POSTGRES_PASSWORD: option_engine
+      POSTGRES_DB: option_engine
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../postgres/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U option_engine -d option_engine"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      OE_ENV: development
+      OE_POSTGRES_HOST: postgres
+      OE_POSTGRES_PORT: 5432
+      OE_POSTGRES_USER: option_engine
+      OE_POSTGRES_PASSWORD: option_engine
+      OE_POSTGRES_DATABASE: option_engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

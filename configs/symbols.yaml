@@ -1,0 +1,35 @@
+- symbol: NIFTY
+  token: "256265"
+  exchange: NSE
+  instrument_type: INDEX
+  lot_size: 25
+  segment: INDICES
+
+- symbol: BANKNIFTY
+  token: "260105"
+  exchange: NSE
+  instrument_type: INDEX
+  lot_size: 15
+  segment: INDICES
+
+- symbol: NIFTY24JAN22500CE
+  token: "12345678"
+  exchange: NSE
+  instrument_type: OPTION
+  underlying: NIFTY
+  strike: 22500
+  expiry: 2024-01-25T00:00:00Z
+  option_type: CE
+  lot_size: 25
+  segment: NFO
+
+- symbol: NIFTY24JAN22500PE
+  token: "12345679"
+  exchange: NSE
+  instrument_type: OPTION
+  underlying: NIFTY
+  strike: 22500
+  expiry: 2024-01-25T00:00:00Z
+  option_type: PE
+  lot_size: 25
+  segment: NFO

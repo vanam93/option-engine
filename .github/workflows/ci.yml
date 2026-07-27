@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: option_engine
+          POSTGRES_PASSWORD: option_engine
+          POSTGRES_DB: option_engine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U option_engine -d option_engine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+        env:
+          OE_POSTGRES_HOST: localhost
+          OE_POSTGRES_PORT: 5432
+          OE_POSTGRES_USER: option_engine
+          OE_POSTGRES_PASSWORD: option_engine
+          OE_POSTGRES_DATABASE: option_engine
+
+      - name: Build
+        run: go build -o bin/option-engine ./cmd/server
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest

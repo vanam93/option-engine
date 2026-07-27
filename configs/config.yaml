@@ -1,0 +1,66 @@
+env: development
+
+http:
+  host: 0.0.0.0
+  port: 8080
+
+websocket:
+  path: /ws
+  read_buffer_size: 1024
+  write_buffer_size: 1024
+
+postgres:
+  host: localhost
+  port: 5432
+  user: option_engine
+  password: option_engine
+  database: option_engine
+  ssl_mode: disable
+  max_conns: 10
+  min_conns: 2
+  max_conn_lifetime: 30m
+
+logging:
+  level: info
+  format: json
+
+shutdown:
+  timeout: 15s
+
+market:
+  provider: mock
+  mock:
+    tick_interval: 1s
+  replay:
+    start_time: "2024-01-15T09:15:00+05:30"
+    speed: 1.0
+
+provider:
+  reconnect:
+    interval: 5s
+    max_retries: -1
+
+heartbeat:
+  interval: 10s
+
+subscription:
+  batch_size: 200
+
+calendar:
+  timezone: Asia/Kolkata
+  regular_open: "09:15"
+  regular_close: "15:30"
+  muhurat_open: "18:00"
+  muhurat_close: "19:15"
+  early_close_at: "13:00"
+  expiry_weekday: 4
+  holidays:
+    - "2024-01-26"
+    - "2024-03-08"
+  muhurat_days:
+    - "2024-11-01"
+  early_close_days:
+    - "2024-10-31"
+
+symbols:
+  file: configs/symbols.yaml
