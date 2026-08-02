@@ -11,6 +11,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/candle"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/signal"
+	"github.com/vanam-gangireddy/option-engine/internal/analytics/strategy"
 	"github.com/vanam-gangireddy/option-engine/internal/application/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
@@ -50,6 +51,7 @@ type Container struct {
 	CandleEngine      *candle.Engine
 	IndicatorEngine   *indicator.Engine
 	SignalEngine      *signal.Engine
+	StrategyEngine    *strategy.Engine
 	Postgres          *postgres.Pool
 	HTTPServer       *http.Server
 	WSServer         *ws.Hub
@@ -157,6 +159,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("analytics signal engine: %w", err)
 	}
 
+	strategyCfg, err := config.BuildStrategyEngineConfig(cfg.StrategyEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("analytics strategy config: %w", err)
+	}
+	strategyEngine, err := strategy.New(strategyCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("analytics strategy engine: %w", err)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -172,6 +183,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, candleEngine)
 	healthReporters = append(healthReporters, indicatorEngine)
 	healthReporters = append(healthReporters, signalEngine)
+	healthReporters = append(healthReporters, strategyEngine)
 	healthReporters = append(healthReporters, &postgresHealthAdapter{pool: pool})
 
 	moduleLog := logger.WithModule(log, "bootstrap")
@@ -198,6 +210,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		CandleEngine:      candleEngine,
 		IndicatorEngine:   indicatorEngine,
 		SignalEngine:      signalEngine,
+		StrategyEngine:    strategyEngine,
 		Postgres:          pool,
 		HTTPServer:       httpServer,
 		WSServer:         wsHub,
@@ -221,6 +234,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			symbols = append(symbols, inst.Symbol)
 		}
 		if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
+			return err
+		}
+	}
+	if c.StrategyEngine != nil {
+		if err := c.StrategyEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -259,6 +277,9 @@ func (c *Container) Close() {
 	}
 	if c.IndicatorEngine != nil {
 		_ = c.IndicatorEngine.Close()
+	}
+	if c.StrategyEngine != nil {
+		_ = c.StrategyEngine.Close()
 	}
 	if c.SignalEngine != nil {
 		_ = c.SignalEngine.Close()

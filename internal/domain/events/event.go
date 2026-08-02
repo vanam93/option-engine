@@ -17,6 +17,7 @@ const (
 	OptionChainUpdated       Type = "option.chain.updated"
 	IndicatorUpdated         Type = "indicator.updated"
 	SignalGenerated          Type = "signal.generated"
+	StrategyDecision         Type = "strategy.decision"
 	ContextEvaluated         Type = "context.evaluated"
 	StrategySignalGenerated  Type = "strategy.signal.generated"
 	DecisionMade             Type = "decision.made"

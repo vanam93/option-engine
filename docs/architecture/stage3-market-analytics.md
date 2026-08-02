@@ -13,7 +13,8 @@ Indicator Engine       ← Phase 2A (implemented)
     ↓  IndicatorUpdated
 Signal Engine          ← Phase 3 (implemented)
     ↓  SignalGenerated
-Strategy Engine        ← planned
+Strategy Engine        ← Phase 4 (implemented)
+    ↓  StrategyDecision
 ```
 
 ## Phase 1 — Candle Engine
@@ -178,6 +179,58 @@ analytics:
 
 `GET /health/components` includes `signal_engine` with `signals_generated`, `buy_count`, `sell_count`, `neutral_count`, and `active_rules`.
 
+## Phase 4 — Strategy Engine
+
+### Responsibility
+
+- Subscribe to `SignalGenerated` events on the runtime bus.
+- Combine aligned signals into strategy decisions and publish `StrategyDecision` events.
+- Does **not** execute trades; downstream Decision/Risk Engine consumes decisions.
+
+### Packages
+
+| Package | Role |
+|---------|------|
+| `internal/analytics/strategy` | Strategy rules, position state, health |
+
+### Strategies
+
+| Strategy | Inputs | Outputs |
+|----------|--------|---------|
+| Trend following | EMA crossover + MACD confirmation | `LONG_ENTRY`, `SHORT_ENTRY` |
+| Mean reversion | RSI + Bollinger confirmation | `LONG_ENTRY`, `SHORT_ENTRY` |
+| Breakout | Placeholder (disabled by default) | — |
+
+Decision states: `LONG_ENTRY`, `SHORT_ENTRY`, `LONG_EXIT`, `SHORT_EXIT`, `HOLD`.
+
+### Configuration
+
+```yaml
+analytics:
+  strategy:
+    enabled: true
+    trend_following:
+      enabled: true
+    mean_reversion:
+      enabled: true
+    breakout:
+      enabled: false
+```
+
+### Lifecycle
+
+1. Strategy engine subscribes to the bus **before** the signal engine starts.
+2. Signal engine publishes `SignalGenerated` events.
+3. On shutdown, gateway → candle → indicator → strategy → signal (reverse startup order).
+
+### Event payload (`StrategyDecision`)
+
+- `symbol`, `timeframe`, `decision`, `strategy`, `confidence`, `timestamp`, `reason`
+
+### Health
+
+`GET /health/components` includes `strategy_engine` with `strategies_enabled`, `decisions_generated`, `long_entries`, `short_entries`, `exits`, and `holds`.
+
 ## Next phases
 
-- **Strategy Engine**: consume `SignalGenerated` and publish `StrategySignalGenerated`.
+- **Decision/Risk Engine**: consume `StrategyDecision` and publish `DecisionMade`.

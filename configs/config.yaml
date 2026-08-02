@@ -119,3 +119,12 @@ analytics:
       overbought: 70
     bollinger:
       enabled: true
+
+  strategy:
+    enabled: true
+    trend_following:
+      enabled: true
+    mean_reversion:
+      enabled: true
+    breakout:
+      enabled: false

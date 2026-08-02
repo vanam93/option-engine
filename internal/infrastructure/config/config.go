@@ -114,6 +114,7 @@ type AnalyticsConfig struct {
 	Candle    CandleAnalyticsConfig    `mapstructure:"candle"`
 	Indicator IndicatorAnalyticsConfig `mapstructure:"indicator"`
 	Signal    SignalAnalyticsConfig    `mapstructure:"signal"`
+	Strategy  StrategyAnalyticsConfig  `mapstructure:"strategy"`
 }
 
 // SignalAnalyticsConfig controls the signal evaluation engine.
@@ -147,6 +148,31 @@ type RSISignalAnalyticsConfig struct {
 
 // BollingerSignalConfig configures Bollinger band signals.
 type BollingerSignalConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
+// StrategyAnalyticsConfig controls the strategy decision engine.
+type StrategyAnalyticsConfig struct {
+	Enabled          bool                            `mapstructure:"enabled"`
+	SubscriberBuffer int                             `mapstructure:"subscriber_buffer"`
+	MinConfidence    float64                         `mapstructure:"min_confidence"`
+	TrendFollowing   TrendFollowingAnalyticsConfig   `mapstructure:"trend_following"`
+	MeanReversion    MeanReversionAnalyticsConfig    `mapstructure:"mean_reversion"`
+	Breakout         BreakoutAnalyticsConfig         `mapstructure:"breakout"`
+}
+
+// TrendFollowingAnalyticsConfig enables the trend-following strategy.
+type TrendFollowingAnalyticsConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
+// MeanReversionAnalyticsConfig enables the mean-reversion strategy.
+type MeanReversionAnalyticsConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
+// BreakoutAnalyticsConfig enables the breakout strategy placeholder.
+type BreakoutAnalyticsConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 }
 
@@ -282,6 +308,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.signal.rsi.oversold", 30)
 	v.SetDefault("analytics.signal.rsi.overbought", 70)
 	v.SetDefault("analytics.signal.bollinger.enabled", true)
+
+	v.SetDefault("analytics.strategy.enabled", true)
+	v.SetDefault("analytics.strategy.subscriber_buffer", 256)
+	v.SetDefault("analytics.strategy.min_confidence", 0.5)
+	v.SetDefault("analytics.strategy.trend_following.enabled", true)
+	v.SetDefault("analytics.strategy.mean_reversion.enabled", true)
+	v.SetDefault("analytics.strategy.breakout.enabled", false)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -382,6 +415,28 @@ func (c *Config) SignalEngineSettings() SignalEngineConfig {
 		MACDCross:        c.Analytics.Signal.MACDCross,
 		RSI:              c.Analytics.Signal.RSI,
 		Bollinger:        c.Analytics.Signal.Bollinger,
+	}
+}
+
+// StrategyEngineConfig is the validated strategy configuration used by DI wiring.
+type StrategyEngineConfig struct {
+	Enabled          bool
+	SubscriberBuffer int
+	MinConfidence    float64
+	TrendFollowing   TrendFollowingAnalyticsConfig
+	MeanReversion    MeanReversionAnalyticsConfig
+	Breakout         BreakoutAnalyticsConfig
+}
+
+// StrategyEngineSettings maps analytics strategy settings.
+func (c *Config) StrategyEngineSettings() StrategyEngineConfig {
+	return StrategyEngineConfig{
+		Enabled:          c.Analytics.Strategy.Enabled,
+		SubscriberBuffer: c.Analytics.Strategy.SubscriberBuffer,
+		MinConfidence:    c.Analytics.Strategy.MinConfidence,
+		TrendFollowing:   c.Analytics.Strategy.TrendFollowing,
+		MeanReversion:    c.Analytics.Strategy.MeanReversion,
+		Breakout:         c.Analytics.Strategy.Breakout,
 	}
 }
 
