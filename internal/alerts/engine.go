@@ -186,7 +186,14 @@ func (e *Engine) publish(update StateUpdate, candidate candidateAlert, at time.T
 	if err != nil {
 		return
 	}
+	e.cache.Record(out)
 	e.bus.Publish(evt)
+}
+
+// List returns alerts matching optional filters.
+func (e *Engine) List(symbol, strategy, timeframe, status string, confidenceMin float64) []AlertGenerated {
+	_ = strategy
+	return e.cache.List(symbol, strategy, timeframe, status, confidenceMin)
 }
 
 // Close stops the engine and releases its subscription.

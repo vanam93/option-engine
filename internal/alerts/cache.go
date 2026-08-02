@@ -13,15 +13,17 @@ type fingerprintKey struct {
 	reason           string
 }
 
-// Cache stores deduplication state and alert ID sequencing.
+// Cache stores deduplication state, alert history, and alert ID sequencing.
 type Cache struct {
 	mu sync.Mutex
 
 	cooldown time.Duration
+	maxHistory int
 
 	seenRecommendations map[string]struct{}
 	lastEmitted         map[fingerprintKey]time.Time
 	seqBySymbolDate     map[string]uint64
+	history             []AlertGenerated
 }
 
 // NewCache creates an empty alert deduplication cache.
@@ -31,9 +33,11 @@ func NewCache(cooldown time.Duration) *Cache {
 	}
 	return &Cache{
 		cooldown:            cooldown,
+		maxHistory:          10000,
 		seenRecommendations: make(map[string]struct{}),
 		lastEmitted:         make(map[fingerprintKey]time.Time),
 		seqBySymbolDate:     make(map[string]uint64),
+		history:             make([]AlertGenerated, 0, 256),
 	}
 }
 
@@ -77,4 +81,39 @@ func (c *Cache) NextAlertID(symbol string, at time.Time) string {
 	c.seqBySymbolDate[dateKey]++
 	seq := c.seqBySymbolDate[dateKey]
 	return fmt.Sprintf("ALT-%s-%s-%06d", at.UTC().Format("20060102"), symbol, seq)
+}
+
+// Record stores a published alert in queryable history.
+func (c *Cache) Record(alert AlertGenerated) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.history = append(c.history, alert)
+	if len(c.history) > c.maxHistory {
+		c.history = append([]AlertGenerated(nil), c.history[len(c.history)-c.maxHistory:]...)
+	}
+}
+
+// List returns alerts matching optional filters.
+func (c *Cache) List(symbol, strategy, timeframe, status string, confidenceMin float64) []AlertGenerated {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	out := make([]AlertGenerated, 0, len(c.history))
+	for _, alert := range c.history {
+		if symbol != "" && alert.Symbol != symbol {
+			continue
+		}
+		if timeframe != "" && alert.Timeframe != timeframe {
+			continue
+		}
+		if status != "" && string(alert.CurrentStatus) != status {
+			continue
+		}
+		if confidenceMin > 0 && alert.Confidence < confidenceMin {
+			continue
+		}
+		_ = strategy
+		out = append(out, alert)
+	}
+	return out
 }

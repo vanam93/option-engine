@@ -183,6 +183,11 @@ func (e *Engine) publish(rec Recommendation, latest TimelineEntry) {
 	e.bus.Publish(evt)
 }
 
+// List returns recommendations matching optional filters.
+func (e *Engine) List(symbol, strategy, timeframe, status string, confidenceMin float64) []Recommendation {
+	return e.cache.List(symbol, strategy, timeframe, status, confidenceMin)
+}
+
 // Get returns a recommendation and timeline by ID.
 func (e *Engine) Get(id string) (Recommendation, []TimelineEntry, bool) {
 	return e.cache.GetByID(id)

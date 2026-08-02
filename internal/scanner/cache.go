@@ -28,6 +28,7 @@ type Cache struct {
 	mu      sync.Mutex
 	byKey   map[symbolKey]*SymbolState
 	symbols map[string]struct{}
+	latest  map[symbolKey]ScanResult
 }
 
 // NewCache creates an empty scanner cache.
@@ -35,6 +36,7 @@ func NewCache() *Cache {
 	return &Cache{
 		byKey:   make(map[symbolKey]*SymbolState),
 		symbols: make(map[string]struct{}),
+		latest:  make(map[symbolKey]ScanResult),
 	}
 }
 
@@ -106,4 +108,28 @@ func (c *Cache) symbolCount() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.symbols)
+}
+
+func (c *Cache) storeResult(result ScanResult) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := symbolKey{symbol: result.Symbol, timeframe: result.Timeframe}
+	c.latest[key] = result
+}
+
+// Snapshot returns the latest scanner results and symbol states.
+func (c *Cache) Snapshot() ([]ScanResult, []SymbolState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	results := make([]ScanResult, 0, len(c.latest))
+	for _, result := range c.latest {
+		results = append(results, result)
+	}
+
+	states := make([]SymbolState, 0, len(c.byKey))
+	for _, state := range c.byKey {
+		states = append(states, *state)
+	}
+	return results, states
 }

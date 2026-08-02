@@ -2755,3 +2755,305 @@ All notification channels are **future adapters** that subscribe to `alert.gener
 | 7 | Scanner Persistence | Planned |
 | 8 | Query Layer | Planned |
 
+---
+
+## Phase 7 — Research Query API
+
+Phase 7 introduces the **Research Query API** (`internal/query`). The API is a read-only HTTP layer that exposes the platform's complete research, recommendation, alert, and analytics state. It is the single interface for dashboards, mobile apps, email services, Telegram bots, CLI tools, and future integrations. No UI logic, no business logic, and no recommendation generation are included.
+
+### Purpose
+
+| Goal | Detail |
+|------|--------|
+| Single read interface | One REST surface for all intelligence and research state |
+| Read-only | No writes, no EventBus subscriptions, no side effects |
+| Downstream-facing | Serves Dashboard, Mobile, Email, Telegram, CLI, and REST clients |
+| Denormalized responses | Returns query DTOs with metadata, filters, and pagination |
+| No execution | Intelligence queries only; never routes orders |
+
+### Pipeline
+
+```text
+Dashboard / Mobile / REST / CLI / Email / Telegram
+    ↓
+Research Query API (internal/query)
+    ↓
+Read-only sources:
+    Recommendation State Manager
+    Alert Engine
+    Research Repository (PostgreSQL)
+    Optimization Engine
+    Performance Engine
+    Scanner Engine
+    Opportunity Engine
+```
+
+### Goals
+
+| Goal | Detail |
+|------|--------|
+| REST endpoints | Standard `GET` routes under `/api/v1` |
+| Filtering | `symbol`, `strategy`, `timeframe`, `status`, `confidence_min` |
+| Pagination | `limit` and `offset` on list endpoints |
+| Response envelope | `metadata`, `data`, `pagination`, `timestamp`, `filters` |
+| Health observability | Request counts, latency, repository latency, cache hit/miss |
+| Thread-safe reads | Delegates to engine snapshot/read APIs only |
+
+### Package layout
+
+```text
+internal/query/
+├── api.go          # Query facade, filter normalization, response envelopes
+├── handlers.go     # Gin HTTP handlers
+├── router.go       # Route registration
+├── repository.go   # Read-only aggregation from engines and PostgreSQL
+├── models.go       # DTOs, filters, pagination, response types
+├── health.go       # Query API health reporter
+├── config.go       # Enabled flag, API prefix, pagination defaults
+├── errors.go       # Structured errors
+└── api_test.go     # List, detail, timeline, alerts, filter, pagination tests
+```
+
+Configuration wiring: `internal/infrastructure/config/query.go`
+
+### Architecture
+
+```mermaid
+flowchart TB
+    CLIENTS["Clients\n(Dashboard, Mobile, CLI, Email, Telegram)"]
+    API[Research Query API]
+    RSM[Recommendation State]
+    AE[Alert Engine]
+    REPO[Research Repository]
+    OPT[Optimization Engine]
+    PERF[Performance Engine]
+    SCAN[Scanner Engine]
+    OPP[Opportunity Engine]
+
+    CLIENTS --> API
+    API --> RSM
+    API --> AE
+    API --> REPO
+    API --> OPT
+    API --> PERF
+    API --> SCAN
+    API --> OPP
+```
+
+### Component responsibilities
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| API | `api.go` | Normalize filters, paginate, build response envelopes |
+| Handlers | `handlers.go` | Parse query params, invoke API, return JSON |
+| Router | `router.go` | Mount routes on Gin engine group |
+| Repository | `repository.go` | Aggregate read-only calls to engines and PostgreSQL |
+| Models | `models.go` | DTOs, filters, pagination metadata |
+| Health | `health.go` | Request/error/latency metrics |
+| Config | `config.go` | `enabled`, `api_prefix`, pagination limits |
+
+### REST API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/recommendations` | List recommendations with filters and pagination |
+| `GET` | `/api/v1/recommendations/{id}` | Single recommendation detail |
+| `GET` | `/api/v1/recommendations/{id}/timeline` | Recommendation timeline entries |
+| `GET` | `/api/v1/alerts` | List generated alerts |
+| `GET` | `/api/v1/opportunities` | Current opportunity rankings snapshot |
+| `GET` | `/api/v1/scanner` | Current scanner results and symbol states |
+| `GET` | `/api/v1/performance` | Performance engine snapshot |
+| `GET` | `/api/v1/optimization` | Optimization engine snapshot |
+| `GET` | `/api/v1/research/{id}` | Research bundle by experiment ID |
+| `GET` | `/api/v1/health/intelligence` | Aggregated intelligence component health |
+
+### Routing
+
+Routes are registered on the configured API prefix (default `/api/v1`) during DI bootstrap:
+
+```text
+query.RegisterRoutes(httpServer.Engine().Group("/api/v1"), queryAPI)
+```
+
+More specific routes (e.g. `/recommendations/:id/timeline`) are registered before parameterized routes to avoid shadowing.
+
+### Filtering
+
+All list and snapshot endpoints accept optional query parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `symbol` | string | Filter by instrument symbol |
+| `strategy` | string | Filter by strategy identifier |
+| `timeframe` | string | Filter by bar timeframe |
+| `status` | string | Filter by recommendation/alert lifecycle status |
+| `confidence_min` | float | Minimum confidence threshold |
+| `limit` | int | Page size (default `50`, max `500`) |
+| `offset` | int | Page offset (default `0`) |
+
+Applied filters are echoed in the response `metadata.filters` object.
+
+### Pagination
+
+List endpoints (`/recommendations`, `/alerts`) return:
+
+```json
+{
+  "metadata": {
+    "timestamp": "2026-08-02T10:00:00Z",
+    "filters": { "limit": 50, "offset": 0 },
+    "pagination": { "limit": 50, "offset": 0, "total": 128, "has_more": true }
+  },
+  "data": []
+}
+```
+
+### Response model
+
+#### List response
+
+| Field | Description |
+|-------|-------------|
+| `metadata.timestamp` | Response generation time (UTC) |
+| `metadata.filters` | Applied query filters |
+| `metadata.pagination` | `limit`, `offset`, `total`, `has_more` |
+| `data` | Array of result items |
+
+#### Item response
+
+| Field | Description |
+|-------|-------------|
+| `metadata` | Timestamp and filters |
+| `data` | Single item (recommendation, research bundle, etc.) |
+
+#### Timeline response
+
+| Field | Description |
+|-------|-------------|
+| `metadata` | Timestamp and filters |
+| `recommendation_id` | Stable recommendation identifier |
+| `timeline` | Chronological timeline entries |
+
+### Repository usage
+
+The query repository reads **only** from engine public read APIs and PostgreSQL:
+
+| Endpoint | Data source | Read method |
+|----------|-------------|-------------|
+| Recommendations | Recommendation State Manager | `List()`, `Get()` |
+| Alerts | Alert Engine | `List()` |
+| Opportunities | Opportunity Engine | `Snapshot()` |
+| Scanner | Scanner Engine | `Snapshot()` |
+| Performance | Performance Engine | `State()` |
+| Optimization | Optimization Engine | `State()` |
+| Research | Research Repository | `GetResearchBundle()` |
+| Intelligence health | Intelligence engines | `Health()` |
+
+No EventBus subscriptions. No direct cache access bypassing engine APIs. No writes.
+
+### Configuration
+
+```yaml
+query:
+  enabled: true
+  api_prefix: /api/v1
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable query API route registration |
+| `api_prefix` | `/api/v1` | Base path for query routes |
+| `default_limit` | `50` | Default page size for list endpoints |
+| `max_limit` | `500` | Maximum allowed page size |
+
+### Health monitoring
+
+`GET /health/components` includes `query_api`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether query API is configured on |
+| `requests` | Total API requests served |
+| `errors` | Total error responses |
+| `average_latency` | Mean request latency (ms) |
+| `repository_latency` | Mean PostgreSQL read latency (ms) |
+| `cache_hits` | Successful repository reads |
+| `cache_misses` | Repository reads that returned not-found |
+
+`GET /api/v1/health/intelligence` returns aggregated health from scanner, opportunity, recommendation, validation, recommendation state, alert, and research engines.
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| API handlers | Stateless; concurrent HTTP goroutines |
+| Repository | Delegates to thread-safe engine read APIs |
+| Health counters | `sync.Mutex` on global metrics |
+| Engine snapshots | Immutable copies returned from engines |
+
+Rules:
+
+- No mutable state in query package beyond health counters
+- Repository never holds locks across engine calls
+- PostgreSQL reads use request context with timeout
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Query API disabled | `503 Service Unavailable` |
+| Resource not found | `404 Not Found` |
+| Malformed query params | Defaults applied; invalid numerics treated as zero |
+| PostgreSQL error | `500 Internal Server Error` |
+| Nil engine dependency | Empty result set (graceful degradation) |
+
+### Future Dashboard integration
+
+| Consumer | Integration |
+|----------|-------------|
+| Dashboard | Poll or WebSocket-bridge query endpoints for live views |
+| Mobile | REST client against `/api/v1/recommendations` and `/api/v1/alerts` |
+| Email digest | Scheduled job queries closed recommendations and alerts |
+| Telegram bot | Command handlers call query API for symbol lookups |
+| CLI | `curl` or SDK against standard REST endpoints |
+| WebSocket bridge | Future adapter fans out query snapshots to connected clients |
+
+The Dashboard layer (`internal/dashboard`, future) will consume the Query API — not engine internals directly.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| List recommendations | `GET /recommendations` returns paginated list |
+| Recommendation detail | `GET /recommendations/{id}` returns single item |
+| Timeline endpoint | `GET /recommendations/{id}/timeline` returns entries |
+| Alert endpoint | `GET /alerts` returns alert list |
+| Filter by symbol | `?symbol=NIFTY` filters results |
+| Pagination | `?limit=1&offset=0` returns `has_more: true` |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Read-only repository | Query layer never mutates platform state |
+| Engine read APIs only | Respects single-ownership; no cache bypass |
+| Append-only engine snapshots | `Snapshot()`/`State()`/`List()` added to engines without changing event flow |
+| Gin route registration in DI | Keeps HTTP adapter thin; query owns its routes |
+| Denormalized DTOs | Stable API contract independent of internal engine types |
+| In-memory alert history | Phase 7 scope; persistent alert store deferred to future phase |
+| No authentication | Auth layer deferred to future multi-user phase |
+
+### Phase 7 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Recommendation State Manager | ✅ Complete |
+| 6 | Alert Engine | ✅ Complete |
+| 7 | Research Query API | ✅ Complete |
+| 8 | Scanner Persistence | Planned |
+| 9 | Dashboard Layer | Planned |
+

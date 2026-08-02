@@ -248,6 +248,35 @@ func (e *Engine) publish(item RankedOpportunity, at time.Time) {
 	e.bus.Publish(out)
 }
 
+// OpportunitySnapshot is an immutable read model of ranked opportunities.
+type OpportunitySnapshot struct {
+	Ranked   []RankedOpportunity `json:"ranked"`
+	Platform PlatformState     `json:"platform"`
+	Summary  Summary           `json:"summary"`
+}
+
+// Snapshot returns the current ranked opportunity state.
+func (e *Engine) Snapshot() OpportunitySnapshot {
+	states := e.cache.AllSymbols()
+	platform := e.cache.Platform()
+	at := e.clk.Now().UTC()
+	ranked := e.ranker.Rank(states, platform, e.scorer, at)
+	top := e.ranker.TopN(ranked)
+
+	e.mu.Lock()
+	summary := e.summary
+	e.mu.Unlock()
+	if summary.OpportunitiesRanked == 0 && len(ranked) > 0 {
+		summary = Summarize(ranked, top)
+	}
+
+	return OpportunitySnapshot{
+		Ranked:   top,
+		Platform: platform,
+		Summary:  summary,
+	}
+}
+
 // Close stops the engine and releases its subscription.
 func (e *Engine) Close() error {
 	e.mu.Lock()

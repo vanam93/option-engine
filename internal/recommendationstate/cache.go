@@ -135,6 +135,37 @@ func (c *Cache) index(id, symbol, strategy string) {
 	c.byStrategy[strategy][id] = struct{}{}
 }
 
+// List returns all recommendations optionally filtered by query dimensions.
+func (c *Cache) List(symbol, strategy, timeframe, status string, confidenceMin float64) []Recommendation {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	out := make([]Recommendation, 0, len(c.byID))
+	for _, stored := range c.byID {
+		if stored == nil {
+			continue
+		}
+		rec := stored.recommendation
+		if symbol != "" && rec.Symbol != symbol {
+			continue
+		}
+		if strategy != "" && rec.Strategy != strategy {
+			continue
+		}
+		if timeframe != "" && rec.Timeframe != timeframe {
+			continue
+		}
+		if status != "" && string(rec.CurrentStatus) != status {
+			continue
+		}
+		if confidenceMin > 0 && rec.Confidence < confidenceMin {
+			continue
+		}
+		out = append(out, rec)
+	}
+	return out
+}
+
 // GetByID returns a recommendation and its timeline by ID.
 func (c *Cache) GetByID(id string) (Recommendation, []TimelineEntry, bool) {
 	c.mu.RLock()

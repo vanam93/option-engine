@@ -35,6 +35,7 @@ type Config struct {
 	Research     ResearchConfig     `mapstructure:"research"`
 	Scanner      ScannerConfig      `mapstructure:"scanner"`
 	Intelligence IntelligenceConfig `mapstructure:"intelligence"`
+	Query        QueryConfig        `mapstructure:"query"`
 }
 
 type HTTPConfig struct {

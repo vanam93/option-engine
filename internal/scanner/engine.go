@@ -264,7 +264,20 @@ func (e *Engine) publish(result ScanResult) {
 		return
 	}
 	e.bus.Publish(out)
+	e.cache.storeResult(result)
 	e.health.recordMatch(result.Timestamp)
+}
+
+// ScannerSnapshot is an immutable read model of scanner state.
+type ScannerSnapshot struct {
+	Results []ScanResult  `json:"results"`
+	States  []SymbolState `json:"states"`
+}
+
+// Snapshot returns the latest scanner results and symbol states.
+func (e *Engine) Snapshot() ScannerSnapshot {
+	results, states := e.cache.Snapshot()
+	return ScannerSnapshot{Results: results, States: states}
 }
 
 // Close stops the engine and releases its subscription.
