@@ -62,3 +62,52 @@ func TestEngineWarmUpPublishesAfterPeriod(t *testing.T) {
 		}
 	}
 }
+
+func TestEngineRSIATRWarmUp(t *testing.T) {
+	bus := eventbus.New()
+	defer bus.Close()
+
+	engine, err := indicator.New(indicator.Config{
+		Enabled:          true,
+		SubscriberBuffer: 8,
+		RSI:              []indicator.PeriodConfig{{Period: 2}},
+		ATR:              []indicator.PeriodConfig{{Period: 2}},
+	}, bus, nil)
+	require.NoError(t, err)
+
+	indicatorSub := bus.Subscribe(16, func(e events.Event) bool {
+		return e.Type == events.IndicatorUpdated
+	})
+	defer indicatorSub.Close()
+
+	require.NoError(t, engine.Start(context.Background()))
+	defer func() { _ = engine.Close() }()
+
+	ts := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	bars := []market.Candle{
+		{ID: uuid.New(), Symbol: "NIFTY", Timeframe: market.TF1m, High: 12, Low: 8, Close: 10, OpenTime: ts, CloseTime: ts.Add(time.Minute)},
+		{ID: uuid.New(), Symbol: "NIFTY", Timeframe: market.TF1m, High: 14, Low: 9, Close: 12, OpenTime: ts.Add(time.Minute), CloseTime: ts.Add(2 * time.Minute)},
+		{ID: uuid.New(), Symbol: "NIFTY", Timeframe: market.TF1m, High: 15, Low: 11, Close: 11, OpenTime: ts.Add(2 * time.Minute), CloseTime: ts.Add(3 * time.Minute)},
+	}
+	for _, candle := range bars {
+		evt, err := events.NewEventWithTime(events.CandleClosed, "candle_engine", candle, candle.CloseTime)
+		require.NoError(t, err)
+		bus.Publish(evt)
+	}
+
+	byName := map[domainindicator.Name]int{}
+	deadline := time.After(2 * time.Second)
+	for len(byName) < 2 {
+		select {
+		case evt := <-indicatorSub.C:
+			var value domainindicator.IndicatorValue
+			require.NoError(t, json.Unmarshal(evt.Payload, &value))
+			require.Equal(t, float64(1), value.Values["warmed_up"])
+			byName[value.Name]++
+		case <-deadline:
+			t.Fatalf("expected warmed RSI and ATR events, got %#v", byName)
+		}
+	}
+	require.Equal(t, 1, byName[domainindicator.RSI])
+	require.Equal(t, 1, byName[domainindicator.ATR])
+}

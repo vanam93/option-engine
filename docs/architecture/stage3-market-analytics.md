@@ -82,7 +82,14 @@ See `internal/analytics/candle/VOLUME_CONTRACT.md`. Default mode is `cumulative`
 - Warm-up: no publish until lookback period is satisfied.
 - Startup order: Indicator → Candle → Gateway. Shutdown: Gateway → Candle → Indicator.
 
+## Phase 2B — RSI and ATR
+
+- Incremental Wilder's RSI (close-based) and ATR (OHLC-based).
+- Configurable periods via `analytics.indicator.rsi` and `analytics.indicator.atr`.
+- Reuses the existing indicator cache and `IndicatorUpdated` contract.
+- Default periods: RSI(14), ATR(14).
+
 ## Next phases
 
-- **Phase 2B**: Additional indicators (RSI, MACD, ATR, etc.)
+- **Phase 2C**: Additional indicators (MACD, Bollinger Bands, etc.)
 - **Phase 3**: Signal engine consuming `IndicatorUpdated`.

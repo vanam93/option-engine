@@ -121,6 +121,8 @@ type IndicatorAnalyticsConfig struct {
 	SubscriberBuffer int                    `mapstructure:"subscriber_buffer"`
 	EMA              []IndicatorPeriodConfig `mapstructure:"ema"`
 	SMA              []IndicatorPeriodConfig `mapstructure:"sma"`
+	RSI              []IndicatorPeriodConfig `mapstructure:"rsi"`
+	ATR              []IndicatorPeriodConfig `mapstructure:"atr"`
 }
 
 // IndicatorPeriodConfig is a lookback period for an indicator.
@@ -212,6 +214,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.indicator.subscriber_buffer", 256)
 	v.SetDefault("analytics.indicator.ema", []map[string]any{{"period": 9}})
 	v.SetDefault("analytics.indicator.sma", []map[string]any{{"period": 20}})
+	v.SetDefault("analytics.indicator.rsi", []map[string]any{{"period": 14}})
+	v.SetDefault("analytics.indicator.atr", []map[string]any{{"period": 14}})
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -273,6 +277,8 @@ type IndicatorEngineConfig struct {
 	SubscriberBuffer int
 	EMA              []IndicatorPeriodConfig
 	SMA              []IndicatorPeriodConfig
+	RSI              []IndicatorPeriodConfig
+	ATR              []IndicatorPeriodConfig
 }
 
 // IndicatorEngineSettings maps analytics indicator settings.
@@ -282,6 +288,8 @@ func (c *Config) IndicatorEngineSettings() IndicatorEngineConfig {
 		SubscriberBuffer: c.Analytics.Indicator.SubscriberBuffer,
 		EMA:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.EMA...),
 		SMA:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.SMA...),
+		RSI:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.RSI...),
+		ATR:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.ATR...),
 	}
 }
 

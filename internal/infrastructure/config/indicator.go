@@ -12,17 +12,27 @@ func BuildIndicatorEngineConfig(cfg IndicatorEngineConfig) (indicator.Config, er
 		Enabled:          cfg.Enabled,
 		SubscriberBuffer: cfg.SubscriberBuffer,
 	}
-	for _, p := range cfg.EMA {
-		if p.Period < 1 {
-			return indicator.Config{}, fmt.Errorf("indicator ema period must be >= 1")
-		}
-		out.EMA = append(out.EMA, indicator.PeriodConfig{Period: p.Period})
+	if err := appendPeriods(&out.EMA, cfg.EMA, "ema"); err != nil {
+		return indicator.Config{}, err
 	}
-	for _, p := range cfg.SMA {
-		if p.Period < 1 {
-			return indicator.Config{}, fmt.Errorf("indicator sma period must be >= 1")
-		}
-		out.SMA = append(out.SMA, indicator.PeriodConfig{Period: p.Period})
+	if err := appendPeriods(&out.SMA, cfg.SMA, "sma"); err != nil {
+		return indicator.Config{}, err
+	}
+	if err := appendPeriods(&out.RSI, cfg.RSI, "rsi"); err != nil {
+		return indicator.Config{}, err
+	}
+	if err := appendPeriods(&out.ATR, cfg.ATR, "atr"); err != nil {
+		return indicator.Config{}, err
 	}
 	return out, nil
+}
+
+func appendPeriods(dst *[]indicator.PeriodConfig, src []IndicatorPeriodConfig, name string) error {
+	for _, p := range src {
+		if p.Period < 1 {
+			return fmt.Errorf("indicator %s period must be >= 1", name)
+		}
+		*dst = append(*dst, indicator.PeriodConfig{Period: p.Period})
+	}
+	return nil
 }

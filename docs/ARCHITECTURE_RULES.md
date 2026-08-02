@@ -61,6 +61,26 @@ Avoid breaking changes.
 
 Prefer adding functionality over modifying contracts.
 
+## Analytics
+
+Analytics engines are append-only.
+
+Dependency chain:
+
+Candle
+→ Indicator
+→ Signal
+→ Strategy
+
+Rules:
+
+- Consume events only from the previous stage.
+- Never consume provider events directly.
+- Never read another engine's internal cache.
+- Communicate only through EventBus.
+- Maintain private incremental state.
+- Publish immutable events.
+
 ## Concurrency
 
 No goroutine leaks.

@@ -1,6 +1,7 @@
 package indicator
 
 import "fmt"
+
 // PeriodConfig configures a single indicator lookback window.
 type PeriodConfig struct {
 	Period int `mapstructure:"period" yaml:"period"`
@@ -12,6 +13,8 @@ type Config struct {
 	SubscriberBuffer int
 	EMA              []PeriodConfig
 	SMA              []PeriodConfig
+	RSI              []PeriodConfig
+	ATR              []PeriodConfig
 }
 
 func (c Config) withDefaults() Config {
@@ -30,8 +33,8 @@ func (c Config) Validate() error {
 	if c.SubscriberBuffer < 1 {
 		return fmt.Errorf("indicator: subscriber_buffer must be >= 1")
 	}
-	if len(c.EMA) == 0 && len(c.SMA) == 0 {
-		return fmt.Errorf("indicator: at least one EMA or SMA period is required when enabled")
+	if !c.hasIndicators() {
+		return fmt.Errorf("indicator: at least one indicator period is required when enabled")
 	}
 	for _, p := range c.EMA {
 		if p.Period < 1 {
@@ -43,22 +46,46 @@ func (c Config) Validate() error {
 			return fmt.Errorf("indicator: sma period must be >= 1")
 		}
 	}
+	for _, p := range c.RSI {
+		if p.Period < 1 {
+			return fmt.Errorf("indicator: rsi period must be >= 1")
+		}
+	}
+	for _, p := range c.ATR {
+		if p.Period < 1 {
+			return fmt.Errorf("indicator: atr period must be >= 1")
+		}
+	}
 	return nil
+}
+
+func (c Config) hasIndicators() bool {
+	return len(c.EMA) > 0 || len(c.SMA) > 0 || len(c.RSI) > 0 || len(c.ATR) > 0
 }
 
 // EMAPeriods returns configured EMA periods.
 func (c Config) EMAPeriods() []int {
-	out := make([]int, 0, len(c.EMA))
-	for _, p := range c.EMA {
-		out = append(out, p.Period)
-	}
-	return out
+	return periodList(c.EMA)
 }
 
 // SMAPeriods returns configured SMA periods.
 func (c Config) SMAPeriods() []int {
-	out := make([]int, 0, len(c.SMA))
-	for _, p := range c.SMA {
+	return periodList(c.SMA)
+}
+
+// RSIPeriods returns configured RSI periods.
+func (c Config) RSIPeriods() []int {
+	return periodList(c.RSI)
+}
+
+// ATRPeriods returns configured ATR periods.
+func (c Config) ATRPeriods() []int {
+	return periodList(c.ATR)
+}
+
+func periodList(cfg []PeriodConfig) []int {
+	out := make([]int, 0, len(cfg))
+	for _, p := range cfg {
 		out = append(out, p.Period)
 	}
 	return out

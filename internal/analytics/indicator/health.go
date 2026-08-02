@@ -55,6 +55,8 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, acti
 			"active_series":  u64String(uint64(activeSeries)),
 			"ema_periods":    intSliceString(cfg.EMAPeriods()),
 			"sma_periods":    intSliceString(cfg.SMAPeriods()),
+			"rsi_periods":    intSliceString(cfg.RSIPeriods()),
+			"atr_periods":    intSliceString(cfg.ATRPeriods()),
 		},
 	}
 }
