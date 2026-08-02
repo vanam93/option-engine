@@ -13,6 +13,7 @@ Stage 6 Research AI Layer
     ↓
 Recommendation Console         ← Phase 1 (implemented)
 Historical Backtest Runner       ← Phase 2 (implemented)
+Strategy Laboratory              ← Phase 3 (implemented)
 (Future) AI Explanation Surface
 (Future) Research Query APIs
 ```
@@ -354,3 +355,242 @@ Future Strategy Laboratory, AI Research, and Report Generation phases **must** i
 | Phase | Name | Status |
 |-------|------|--------|
 | 2 | Historical Backtest Runner | ✅ Complete |
+
+---
+
+## Stage 6 Phase 3 — Strategy Laboratory
+
+Phase 3 introduces the **Strategy Laboratory** (`internal/laboratory`). This engine is the **only entry point for initiating strategy research** on the platform. It orchestrates complete research studies by composing existing Stage 4 and Stage 6 capabilities without duplicating replay, optimization, experiments, walk-forward, Monte Carlo, or recommendation logic.
+
+### Purpose
+
+Create the central research workspace for the platform. Every strategy research session executes through the Historical Backtest Runner. Future AI Research Assistant, Research Reports, Strategy Comparison, and Model Evaluation phases consume completed studies from the Strategy Laboratory.
+
+### Architecture
+
+```text
+Research Request
+      ↓
+Strategy Laboratory (internal/laboratory)
+      ↓
+Historical Backtest Runner (internal/backtestrunner)
+      ↓
+Stage 2 → Stage 3 → Stage 4 → Stage 5 → Recommendation Delivery
+      ↓
+Research Repository
+      ↓
+Strategy Laboratory
+      ↓
+Research Study
+```
+
+| File | Responsibility |
+|------|----------------|
+| `engine.go` | Study lifecycle, execution orchestration, event publish, shutdown |
+| `study.go` | Study model, request validation, output aggregation, event payloads |
+| `runner.go` | Delegates study execution to the historical backtest runner |
+| `repository.go` | Completed study storage, versioning, comparison persistence |
+| `comparison.go` | Read-only study comparison by criteria |
+| `catalog.go` | Study, strategy, symbol, timeframe, version, and status indexes |
+| `config.go` | Runtime configuration |
+| `health.go` | Observability counters |
+| `errors.go` | Structured errors |
+| `engine_test.go` | Study, execution, repository, comparison, concurrency, shutdown tests |
+
+### Responsibilities
+
+| Responsibility | Detail |
+|----------------|--------|
+| Create studies | Register research study definitions with strategy, parameters, symbols, timeframes, and date range |
+| Execute studies | Route every study through `BacktestRunnerEngine.StartSession` |
+| Version studies | Auto-increment research versions when `auto_version` is enabled |
+| Store studies | Persist completed studies with aggregated outputs |
+| Compare studies | Read-only comparison by strategy, parameters, symbol, timeframe, date range, and version |
+| Maintain history | Repository and catalog indexes for lookup |
+| Publish events | `study.started`, `study.completed`, `study.compared` |
+| Health | `strategy_laboratory` metrics |
+
+### Study lifecycle
+
+1. `CreateStudy(request)` validates input and assigns a research version.
+2. Study is stored with `PENDING` status and indexed in the catalog.
+3. `ExecuteStudy(studyID)` marks study `RUNNING` and publishes `study.started`.
+4. Study runner builds a `SessionRequest` and invokes the historical backtest runner.
+5. On completion, study output is assembled from backtest session summaries.
+6. Study is stored as `COMPLETED` or `FAILED` and `study.completed` is published.
+7. `CompareStudies(criteria)` matches completed studies without recalculation.
+
+### Research study
+
+Every study contains:
+
+| Field | Description |
+|-------|-------------|
+| `StudyID` | Unique identifier (`STUDY-{timestamp}-{uuid}`) |
+| `Name` | Human-readable study name |
+| `Description` | Optional study description |
+| `Strategy` | Strategy under evaluation |
+| `Parameters` | Strategy parameter set |
+| `Symbols` | Symbols under evaluation |
+| `Timeframes` | Timeframes under evaluation |
+| `Date Range` | Configured start and end times |
+| `CreatedAt` | Study creation timestamp |
+| `CompletedAt` | Study completion timestamp |
+| `Status` | `PENDING`, `RUNNING`, `COMPLETED`, `FAILED` |
+| `ResearchVersion` | Auto-assigned version (`v1`, `v2`, …) |
+| `BacktestSessionIDs` | Linked historical backtest session identifiers |
+
+### Study output
+
+Stores aggregated summaries from completed backtest sessions:
+
+- Backtest summaries
+- Optimization summaries
+- Walk-forward summaries
+- Monte Carlo summaries
+- Recommendation summaries
+- Quality summaries
+- Feedback summaries
+- Research report counts
+
+### Comparison model
+
+Comparison is **read-only**. Matching completed studies are selected by:
+
+- Strategy
+- Parameter set
+- Symbol
+- Timeframe
+- Date range
+- Research version
+
+No metrics are recalculated during comparison.
+
+### Catalog
+
+Maintains indexes for:
+
+- Study index
+- Strategy index
+- Symbol index
+- Timeframe index
+- Version index
+- Status index
+
+### Versioning
+
+When `auto_version: true`, new studies with the same strategy and parameter set receive incrementing versions (`v1`, `v2`, …). `CreateVersion(studyID)` clones an existing study definition into a new versioned study.
+
+### Event contract
+
+**Outputs (append-only):**
+
+`study.started`
+
+```json
+{
+  "study_id": "STUDY-20260802T091500-abc12345",
+  "name": "EMA Cross Study",
+  "strategy": "ema_cross",
+  "symbols": ["NIFTY"],
+  "research_version": "v1",
+  "started_at": "2026-08-02T08:00:00Z"
+}
+```
+
+`study.completed`
+
+```json
+{
+  "study_id": "STUDY-20260802T091500-abc12345",
+  "status": "COMPLETED",
+  "research_version": "v1",
+  "backtest_session_ids": ["BT-20260802T091500-def67890"],
+  "completed_at": "2026-08-02T08:02:00Z"
+}
+```
+
+`study.compared`
+
+```json
+{
+  "comparison_id": "CMP-20260802T091500-ghi11111",
+  "criteria": { "strategy": "ema_cross", "symbol": "NIFTY" },
+  "study_ids": ["STUDY-20260802T091500-abc12345"],
+  "compared_at": "2026-08-02T08:05:00Z"
+}
+```
+
+### Configuration
+
+```yaml
+laboratory:
+  enabled: true
+  auto_version: true
+  concurrent_studies: 1
+```
+
+### Health
+
+Component name: `strategy_laboratory`
+
+| Metric | Description |
+|--------|-------------|
+| `studies_created` | Total studies registered |
+| `studies_completed` | Successfully completed studies |
+| `studies_failed` | Failed studies |
+| `comparisons` | Comparison operations performed |
+| `repository_entries` | Stored study count |
+| `average_execution_duration_ms` | Mean study execution wall-clock duration |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Engine active study counter | `sync.Mutex` |
+| Repository | `sync.RWMutex` |
+| Catalog | `sync.RWMutex` |
+| Concurrent studies | Configurable semaphore via `concurrent_studies` |
+
+Every goroutine accepts `context.Context` and terminates on shutdown. No goroutine leaks.
+
+### Failure handling
+
+- Invalid study requests return structured errors without execution.
+- Concurrent limit breaches return `ErrConcurrentLimit`.
+- Backtest runner failures mark study `FAILED`, persist partial output, and publish `study.completed` with error detail.
+- Shutdown cancels in-flight study context and waits for active studies.
+
+### Trade-offs
+
+| Decision | Rationale |
+|----------|-----------|
+| Delegate to backtest runner | Single historical research execution path; no duplicated pipeline logic |
+| In-memory repository | Fast lookup for research workspace; persistence deferred to future phases |
+| Read-only comparison | Avoids recomputation; comparisons reflect stored study outputs only |
+| Auto versioning | Enables longitudinal strategy research without manual version management |
+| Catalog indexes | O(1) lookup by common research dimensions |
+
+### Future AI integration
+
+Future AI Research Assistant, Research Reports, Strategy Comparison UI, and Model Evaluation phases **must** consume completed studies from the Strategy Laboratory. They **must not** create alternative research execution paths. All new research initiation flows through `LaboratoryEngine.CreateStudy` and `LaboratoryEngine.ExecuteStudy`.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Create study | Study registration and versioning |
+| Execute study | Backtest runner delegation and event publish |
+| Repository lookup | Get/Latest/List/ByStrategy/ByVersion |
+| Study comparison | Criteria matching and comparison persistence |
+| Version creation | Auto-increment research versions |
+| Catalog lookup | Strategy/symbol/timeframe/version/status indexes |
+| Concurrent study protection | Limit enforcement |
+| Graceful shutdown | Clean close with active study |
+| Health metrics | Counters after completion |
+
+### Phase 3 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 3 | Strategy Laboratory | ✅ Complete |

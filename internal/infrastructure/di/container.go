@@ -33,6 +33,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/postgres"
 	"github.com/vanam-gangireddy/option-engine/internal/intelligence"
+	"github.com/vanam-gangireddy/option-engine/internal/laboratory"
 	"github.com/vanam-gangireddy/option-engine/internal/market/cache"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 	"github.com/vanam-gangireddy/option-engine/internal/market/gateway"
@@ -98,6 +99,7 @@ type Container struct {
 	DeliveryEngine            *delivery.Engine
 	ConsoleEngine             *console.Engine
 	BacktestRunnerEngine      *backtestrunner.Engine
+	LaboratoryEngine          *laboratory.Engine
 	IntelligenceAPI           *api.Server
 	BacktestEngine            *backtest.Engine
 	Postgres                  *postgres.Pool
@@ -469,6 +471,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		}
 	}
 
+	laboratoryCfg, err := config.BuildLaboratoryEngineConfig(cfg.LaboratoryEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("laboratory config: %w", err)
+	}
+	laboratoryEngine, err := laboratory.New(laboratoryCfg, bus, clk, backtestRunnerEngine, backtestRunnerEngine.Repository())
+	if err != nil {
+		return nil, fmt.Errorf("laboratory engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -501,6 +512,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, deliveryEngine)
 	healthReporters = append(healthReporters, consoleEngine)
 	healthReporters = append(healthReporters, backtestRunnerEngine)
+	healthReporters = append(healthReporters, laboratoryEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -581,6 +593,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		DeliveryEngine:            deliveryEngine,
 		ConsoleEngine:             consoleEngine,
 		BacktestRunnerEngine:      backtestRunnerEngine,
+		LaboratoryEngine:          laboratoryEngine,
 		IntelligenceAPI:           intelligenceAPI,
 		BacktestEngine:            backtestEngine,
 		Postgres:                  pool,
@@ -646,6 +659,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 	}
 	if c.BacktestRunnerEngine != nil {
 		if err := c.BacktestRunnerEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.LaboratoryEngine != nil {
+		if err := c.LaboratoryEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -819,6 +837,9 @@ func (c *Container) Close() {
 	}
 	if c.BacktestRunnerEngine != nil {
 		_ = c.BacktestRunnerEngine.Close()
+	}
+	if c.LaboratoryEngine != nil {
+		_ = c.LaboratoryEngine.Close()
 	}
 	if c.RecommendationStateEngine != nil {
 		_ = c.RecommendationStateEngine.Close()

@@ -281,6 +281,11 @@ backtest_runner:
   auto_start: false
   concurrent_sessions: 1
 
+laboratory:
+  enabled: true
+  auto_version: true
+  concurrent_studies: 1
+
 api:
   enabled: true
   prefix: /api/v1

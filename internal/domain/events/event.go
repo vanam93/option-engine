@@ -46,6 +46,9 @@ const (
 	AlertFired                        Type = "alert.fired"
 	BacktestSessionStarted            Type = "backtest.session.started"
 	BacktestSessionCompleted          Type = "backtest.session.completed"
+	StudyStarted                      Type = "study.started"
+	StudyCompleted                    Type = "study.completed"
+	StudyCompared                     Type = "study.compared"
 )
 
 // Event is the universal envelope for all system events.
