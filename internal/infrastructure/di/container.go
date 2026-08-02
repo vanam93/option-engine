@@ -24,6 +24,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/execution"
 	"github.com/vanam-gangireddy/option-engine/internal/execution/paper"
 	"github.com/vanam-gangireddy/option-engine/internal/experiments"
+	"github.com/vanam-gangireddy/option-engine/internal/feedback"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/postgres"
@@ -90,6 +91,7 @@ type Container struct {
 	AlertEngine               *alerts.Engine
 	ExplanationEngine         *intelligence.Engine
 	QualityEngine             *quality.Engine
+	FeedbackEngine            *feedback.Engine
 	IntelligenceAPI           *api.Server
 	BacktestEngine            *backtest.Engine
 	Postgres             *postgres.Pool
@@ -399,6 +401,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("quality engine: %w", err)
 	}
 
+	feedbackCfg, err := config.BuildFeedbackEngineConfig(cfg.FeedbackEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("feedback config: %w", err)
+	}
+	feedbackEngine, err := feedback.New(feedbackCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("feedback engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -427,6 +438,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, alertEngine)
 	healthReporters = append(healthReporters, explanationEngine)
 	healthReporters = append(healthReporters, qualityEngine)
+	healthReporters = append(healthReporters, feedbackEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -503,6 +515,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		AlertEngine:               alertEngine,
 		ExplanationEngine:         explanationEngine,
 		QualityEngine:             qualityEngine,
+		FeedbackEngine:            feedbackEngine,
 		IntelligenceAPI:           intelligenceAPI,
 		BacktestEngine:            backtestEngine,
 		Postgres:             pool,
@@ -548,6 +561,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 	}
 	if c.QualityEngine != nil {
 		if err := c.QualityEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.FeedbackEngine != nil {
+		if err := c.FeedbackEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -709,6 +727,9 @@ func (c *Container) Close() {
 	}
 	if c.QualityEngine != nil {
 		_ = c.QualityEngine.Close()
+	}
+	if c.FeedbackEngine != nil {
+		_ = c.FeedbackEngine.Close()
 	}
 	if c.RecommendationStateEngine != nil {
 		_ = c.RecommendationStateEngine.Close()

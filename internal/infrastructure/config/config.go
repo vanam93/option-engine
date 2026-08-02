@@ -478,6 +478,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("intelligence.quality.good_threshold", 0.75)
 	v.SetDefault("intelligence.quality.average_threshold", 0.50)
 
+	v.SetDefault("intelligence.feedback.enabled", true)
+	v.SetDefault("intelligence.feedback.subscriber_buffer", 256)
+	v.SetDefault("intelligence.feedback.rolling_windows", []int{25, 50, 100, 250})
+	v.SetDefault("intelligence.feedback.confidence_buckets", []float64{0.60, 0.70, 0.80, 0.90, 0.95})
+
 	v.SetDefault("api.enabled", true)
 	v.SetDefault("api.prefix", "/api/v1")
 	v.SetDefault("api.read_timeout", "30s")

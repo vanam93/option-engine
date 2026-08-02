@@ -34,6 +34,7 @@ const (
 	RecommendationStateUpdated      Type = "recommendation.state.updated"
 	RecommendationIntelligenceUpdated Type = "recommendation.intelligence.updated"
 	RecommendationQualityUpdated      Type = "recommendation.quality.updated"
+	RecommendationFeedbackUpdated     Type = "recommendation.feedback.updated"
 	AlertGenerated                  Type = "alert.generated"
 	ContextEvaluated        Type = "context.evaluated"
 	StrategySignalGenerated Type = "strategy.signal.generated"

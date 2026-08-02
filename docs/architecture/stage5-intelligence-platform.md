@@ -3878,3 +3878,225 @@ Deterministic entry from first candle close, deterministic timeout from event ti
 |-------|------|--------|
 | 9 | Recommendation Quality Engine | ✅ Complete |
 
+---
+
+## Stage 5 Phase 10 — Recommendation Feedback & Learning Engine
+
+Phase 10 introduces the **Recommendation Feedback & Learning Engine** (`internal/feedback`). This engine continuously learns from completed recommendation quality reports and produces historical intelligence. It is strictly an **analytics engine** — it never generates recommendations, modifies confidence, changes opportunity scores, alters alerts, modifies validation, or modifies quality scores.
+
+### Purpose
+
+Provide continuous learning from completed recommendations:
+
+- Recommendation accuracy
+- Confidence calibration
+- Strategy effectiveness
+- Symbol effectiveness
+- Timeframe effectiveness
+- Recommendation quality trends
+- Rolling statistics
+- Historical learning metrics
+
+### Architecture
+
+```text
+Recommendation Quality Engine
+            ↓
+recommendation.quality.updated
+            ↓
+Recommendation Feedback Engine (internal/feedback)
+            ↓
+recommendation.feedback.updated
+            ├────────► Research Repository (future read)
+            ├────────► Intelligence API (future read)
+            ├────────► Future Adaptive Scoring (Phase 11)
+            └────────► Future Dashboard (Phase 14)
+```
+
+| File | Responsibility |
+|------|----------------|
+| `engine.go` | Lifecycle, subscribe, consume, aggregate, publish, shutdown |
+| `learning.go` | Learning algorithms and learnability rules |
+| `statistics.go` | Win rate, success rate, averages, confidence accuracy, rolling metrics |
+| `aggregator.go` | Overall, strategy, symbol, timeframe, confidence dimensional stats |
+| `cache.go` | Thread-safe in-memory cache and duplicate detection |
+| `events.go` | Input/output payload types |
+| `config.go` | Runtime configuration |
+| `health.go` | Observability counters |
+| `errors.go` | Structured errors |
+
+### Pipeline
+
+1. `recommendation.quality.updated` delivers completed quality reports.
+2. Engine ignores incomplete (in-progress) quality reports.
+3. Duplicate recommendation IDs are skipped after first completed report.
+4. Aggregator updates overall, dimensional, calibration, and rolling statistics.
+5. Engine publishes `recommendation.feedback.updated` with the full snapshot.
+
+### Learning model
+
+Learning is **incremental aggregation** over completed recommendations:
+
+| Dimension | Metrics |
+|-----------|---------|
+| Overall | Totals, success/win rates, averages, false positives/negatives, confidence accuracy |
+| Strategy | Recommendations, wins, losses, expired, averages, win/success rates |
+| Symbol | Recommendations, wins, losses, averages |
+| Timeframe | Recommendations, averages, win rate |
+| Confidence bucket | Recommendations, successes, failures, success rate, averages |
+
+Optional dimensions (scanner, opportunity classification, risk approval, market regime, source) are parsed when present in quality payloads for forward compatibility.
+
+### Aggregation strategy
+
+- **Single consumer goroutine** processes quality events sequentially.
+- **Running totals** per dimension enable O(1) average computation.
+- **Duplicate guard** via recommendation ID set in cache.
+- **No persistence** — Research Repository stores historical data separately.
+
+### Rolling windows
+
+Configurable windows (default: 25, 50, 100, 250) maintain the tail of completed recommendations and expose:
+
+| Metric | Description |
+|--------|-------------|
+| Success rate | SUCCESS / window size |
+| Average return | Mean return % in window |
+| Average quality | Mean quality score in window |
+| Average confidence | Mean confidence in window |
+| Average holding duration | Mean holding time in window |
+
+### Confidence calibration
+
+Buckets derived from configured thresholds (default: 0.60, 0.70, 0.80, 0.90, 0.95):
+
+| Bucket | Range |
+|--------|-------|
+| Top | 0.95–1.00 |
+| High | 0.90–0.95 |
+| Strong | 0.80–0.90 |
+| Moderate | 0.70–0.80 |
+| Low | 0.60–0.70 |
+| Below | < 0.60 |
+
+Per bucket: recommendations, successes, failures, success rate, average return, average quality, average holding time.
+
+Phase 11 will use this data for adaptive scoring recalibration. **No recalibration is performed in Phase 10.**
+
+### Event contract
+
+**Input:** `recommendation.quality.updated` (completed reports only)
+
+**Output:** `recommendation.feedback.updated`
+
+```json
+{
+  "overall": { ... },
+  "strategies": [ ... ],
+  "symbols": [ ... ],
+  "timeframes": [ ... ],
+  "confidence_calibration": [ ... ],
+  "rolling": [ ... ],
+  "timestamp": "2026-08-02T10:30:00Z",
+  "version": "42"
+}
+```
+
+`version` equals total completed recommendations processed.
+
+### Configuration
+
+```yaml
+intelligence:
+  feedback:
+    enabled: true
+    subscriber_buffer: 256
+    rolling_windows:
+      - 25
+      - 50
+      - 100
+      - 250
+    confidence_buckets:
+      - 0.60
+      - 0.70
+      - 0.80
+      - 0.90
+      - 0.95
+```
+
+### Health
+
+Component name: `feedback_engine`
+
+| Detail key | Description |
+|------------|-------------|
+| `events_processed` | Quality events aggregated |
+| `feedback_generated` | Feedback events published |
+| `tracked_strategies` | Unique strategies in cache |
+| `tracked_symbols` | Unique symbols in cache |
+| `tracked_timeframes` | Unique timeframes in cache |
+| `tracked_recommendations` | Unique completed recommendations |
+| `confidence_buckets` | Configured bucket count |
+| `rolling_windows` | Configured window count |
+| `cache_entries` | Unique recommendation IDs seen |
+| `average_processing_latency_ms` | Mean handle latency |
+| `malformed_events` | Unparseable quality payloads |
+| `publish_failures` | Failed feedback publishes |
+| `dropped_events` | Dropped EventBus messages |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Engine goroutine | Single consumer |
+| Cache | `sync.RWMutex` |
+| Aggregator | Owned by cache; single-writer via consumer |
+| Health counters | Updated from consumer goroutine |
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Engine disabled | No subscription; graceful no-op |
+| Malformed payload | Skip; increment `malformed_events` |
+| Incomplete quality report | Skip silently |
+| Duplicate recommendation | Skip; no publish |
+| Publishing failure | Increment `publish_failures` |
+| Cache failure | Must never crash the engine |
+
+### Trade-offs
+
+| Decision | Rationale |
+|----------|-----------|
+| Completed-only learning | Avoids double-counting progress updates |
+| In-memory cache | Fast; Research Repository holds persistence |
+| Full snapshot publish | Downstream consumers need complete state |
+| ID-based deduplication | Replay-safe duplicate handling |
+| No scoring changes | Strict analytics boundary for Phase 10 |
+
+### Future Phase 11 integration
+
+`recommendation.feedback.updated` exposes confidence calibration and dimensional effectiveness metrics for the **Adaptive Scoring Engine**. Phase 10 does not modify scores or confidence — it only emits learning intelligence.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Overall aggregation | Platform-wide metrics |
+| Strategy aggregation | Per-strategy stats |
+| Symbol aggregation | Per-symbol stats |
+| Timeframe aggregation | Per-timeframe stats |
+| Confidence bucket aggregation | Calibration buckets |
+| Rolling window updates | Window tail metrics |
+| Duplicate recommendation handling | ID deduplication |
+| Feedback event publishing | Output contract |
+| Health metrics | Component and counters |
+| Thread safety | Concurrent quality events |
+| Graceful shutdown | Clean close |
+
+### Phase 10 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 10 | Recommendation Feedback & Learning Engine | ✅ Complete |
+
