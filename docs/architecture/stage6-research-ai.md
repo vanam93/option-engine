@@ -594,3 +594,201 @@ Future AI Research Assistant, Research Reports, Strategy Comparison UI, and Mode
 | Phase | Name | Status |
 |-------|------|--------|
 | 3 | Strategy Laboratory | ✅ Complete |
+
+---
+
+## Stage 6 Phase 4 — AI Research Engine
+
+Phase 4 introduces the **AI Research Engine** (`internal/airesearch`). This engine analyzes completed studies from the Strategy Laboratory and produces structured AI research reports. It does **not** generate signals, modify recommendations, change confidence scores, or alter any trading intelligence output.
+
+### Purpose
+
+Provide production-grade quantitative research analysis for completed strategy studies. The engine acts as a professional research analyst: it consumes completed studies, analyzes aggregated metrics, and produces immutable research reports for downstream consumption.
+
+### Architecture
+
+```text
+Strategy Laboratory (internal/laboratory)
+            ↓  study.completed
+AI Research Engine (internal/airesearch)
+            ↓  study.ai.completed
+(Future) Research Report APIs / UI
+```
+
+| File | Responsibility |
+|------|----------------|
+| `engine.go` | Lifecycle, subscribe, consume, analyze dispatch, publish, shutdown |
+| `config.go` | Runtime configuration |
+| `repository.go` | In-memory report storage and lookup |
+| `builder.go` | Report assembly via analyzer |
+| `analyzer.go` | `ResearchAnalyzer` interface and rule-based implementation |
+| `prompt.go` | Deterministic prompt construction from study data |
+| `formatter.go` | Structured report text formatting |
+| `models.go` | Report models and section definitions |
+| `events.go` | `study.ai.completed` payloads |
+| `health.go` | Observability counters |
+| `errors.go` | Structured errors |
+| `engine_test.go` | Consumption, generation, repository, publish, health tests |
+
+### Responsibilities
+
+| Responsibility | Detail |
+|----------------|--------|
+| Consume events | Only `study.completed` |
+| Fetch study data | Read full study from Strategy Laboratory via `StudySource` |
+| Build prompts | Deterministic prompt construction from study metrics |
+| Analyze studies | Rule-based analyzer (future: LLM analyzers) |
+| Generate reports | Structured sections with executive summary and verdict |
+| Store reports | In-memory repository with Get/Latest/List |
+| Publish events | `study.ai.completed` (append-only) |
+| Health | `ai_research_engine` metrics |
+| Read-only analysis | Never modifies recommendations, signals, scores, or strategies |
+
+### Report sections
+
+Every research report includes:
+
+- Executive Summary
+- Strategy Overview
+- Strengths
+- Weaknesses
+- Best Performing Symbols
+- Worst Performing Symbols
+- Best Timeframes
+- Worst Timeframes
+- Parameter Sensitivity
+- Consistency Analysis
+- Walk Forward Summary
+- Monte Carlo Summary
+- Risk Analysis
+- Confidence Assessment
+- Market Regime Suitability
+- Suggested Improvements
+- Suggested Future Experiments
+- Overall Verdict
+
+### Analyzer abstraction
+
+```text
+ResearchAnalyzer interface
+    ├── RuleBasedAnalyzer     (Phase 4 — implemented)
+    ├── OpenAIAnalyzer        (future)
+    ├── ClaudeAnalyzer        (future)
+    ├── GeminiAnalyzer        (future)
+    └── LocalLLMAnalyzer      (future)
+```
+
+Phase 4 implements `RuleBasedAnalyzer` which produces deterministic reports from study metrics without invoking any LLM. The `ResearchAnalyzer` interface accepts a study and prompt, returning structured `ReportSections`. Future LLM analyzers plug into the same interface and receive the deterministic prompt built by `BuildPrompt`.
+
+The engine **never** calls an LLM directly. Prompt construction and report generation are fully deterministic in Phase 4. Later phases replace the analyzer implementation while preserving the engine architecture.
+
+### Rule-based implementation
+
+`RuleBasedAnalyzer` evaluates study output metrics:
+
+- Win rate, return, and confidence thresholds
+- Symbol and timeframe distribution ranking
+- Walk-forward and Monte Carlo run counts
+- Quality distribution analysis
+- Cross-session consistency spread
+- Overall verdict scoring (PASS / CONDITIONAL PASS / FAIL)
+
+All output is deterministic and reproducible from the same study data.
+
+### Pipeline
+
+1. Strategy Laboratory publishes `study.completed`.
+2. AI Research Engine receives the event and fetches the full study from `StudySource`.
+3. `BuildPrompt` constructs a deterministic analysis prompt from study data.
+4. `ResearchAnalyzer.Analyze` produces structured report sections.
+5. `FormatReport` renders the complete report text.
+6. Report is stored in the in-memory repository.
+7. Engine publishes `study.ai.completed` with report metadata.
+
+### Repository
+
+| Method | Description |
+|--------|-------------|
+| `Get(id)` | Lookup report by ID |
+| `Latest()` | Most recently generated report |
+| `List()` | All reports in generation order |
+
+Protected by `sync.RWMutex`.
+
+### Event contract
+
+**Input:** `study.completed` only
+
+**Output (append-only):** `study.ai.completed`
+
+```json
+{
+  "report_id": "REP-20260802T100000-abc12345",
+  "study_id": "STUDY-20260802T091500-abc12345",
+  "research_version": "v1",
+  "analyzer": "rule_based",
+  "executive_summary": "Research report for study EMA Cross Study...",
+  "overall_verdict": "PASS — strategy demonstrates strong metrics...",
+  "completed_at": "2026-08-02T10:00:00Z"
+}
+```
+
+### Configuration
+
+```yaml
+airesearch:
+  enabled: true
+  analyzer: rule_based
+```
+
+### Health
+
+Component name: `ai_research_engine`
+
+| Metric | Description |
+|--------|-------------|
+| `reports_generated` | Total reports produced |
+| `reports_cached` | Reports stored in repository |
+| `analysis_latency` | Mean analysis duration |
+| `publish_failures` | Failed event publish attempts |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Engine state | `sync.Mutex` |
+| Repository | `sync.RWMutex` |
+| Event subscription | Single consumer goroutine |
+
+Every goroutine accepts `context.Context` and terminates on shutdown. No goroutine leaks.
+
+### Failure handling
+
+- Missing study data on `study.completed` is silently skipped (study not yet in repository).
+- Analyzer failures do not publish events or increment report counters.
+- Publish failures increment `publish_failures` health metric.
+- Shutdown cancels subscription context and waits for consumer goroutine.
+
+### Future integration
+
+Future Research Report APIs, AI Explanation Surface, and Research Query phases **must** consume reports from the AI Research Engine repository or `study.ai.completed` events. They **must not** create alternative analysis paths. All study analysis flows through this engine.
+
+Future LLM analyzers (`OpenAIAnalyzer`, `ClaudeAnalyzer`, `GeminiAnalyzer`, `LocalLLMAnalyzer`) replace `RuleBasedAnalyzer` via configuration without modifying the engine pipeline.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Study consumption | `study.completed` triggers report generation |
+| Report generation | All 18 report sections populated |
+| Repository lookup | Get/Latest/List |
+| Event publish | `study.ai.completed` emission |
+| Event isolation | Ignores non-study.completed events |
+| Health metrics | Counters after report generation |
+| Graceful shutdown | Clean close without goroutine leak |
+
+### Phase 4 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 4 | AI Research Engine | ✅ Complete |

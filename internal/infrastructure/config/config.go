@@ -38,6 +38,7 @@ type Config struct {
 	Console      ConsoleConfig      `mapstructure:"console"`
 	BacktestRunner BacktestRunnerConfig `mapstructure:"backtest_runner"`
 	Laboratory     LaboratoryConfig     `mapstructure:"laboratory"`
+	AIResearch     AIResearchConfig     `mapstructure:"airesearch"`
 	API          APIConfig          `mapstructure:"api"`
 }
 
@@ -499,6 +500,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("laboratory.enabled", true)
 	v.SetDefault("laboratory.auto_version", true)
 	v.SetDefault("laboratory.concurrent_studies", 1)
+
+	v.SetDefault("airesearch.enabled", true)
+	v.SetDefault("airesearch.analyzer", "rule_based")
 
 	v.SetDefault("api.enabled", true)
 	v.SetDefault("api.prefix", "/api/v1")

@@ -286,6 +286,10 @@ laboratory:
   auto_version: true
   concurrent_studies: 1
 
+airesearch:
+  enabled: true
+  analyzer: rule_based
+
 api:
   enabled: true
   prefix: /api/v1
