@@ -25,6 +25,8 @@ type Config struct {
 	Calendar     CalendarConfig     `mapstructure:"calendar"`
 	Symbols      SymbolsConfig      `mapstructure:"symbols"`
 	Analytics    AnalyticsConfig    `mapstructure:"analytics"`
+	Execution    ExecutionConfig    `mapstructure:"execution"`
+	Portfolio    PortfolioConfig    `mapstructure:"portfolio"`
 }
 
 type HTTPConfig struct {
@@ -175,6 +177,25 @@ type MeanReversionAnalyticsConfig struct {
 // BreakoutAnalyticsConfig enables the breakout strategy placeholder.
 type BreakoutAnalyticsConfig struct {
 	Enabled bool `mapstructure:"enabled"`
+}
+
+// ExecutionConfig groups execution engine settings.
+type ExecutionConfig struct {
+	Paper PaperExecutionConfig `mapstructure:"paper"`
+}
+
+// PortfolioConfig controls the portfolio and PnL engine.
+type PortfolioConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	SubscriberBuffer int  `mapstructure:"subscriber_buffer"`
+}
+
+// PaperExecutionConfig controls the paper execution engine.
+type PaperExecutionConfig struct {
+	Enabled          bool    `mapstructure:"enabled"`
+	SubscriberBuffer int     `mapstructure:"subscriber_buffer"`
+	SlippagePercent  float64 `mapstructure:"slippage_percent"`
+	DefaultPrice     string  `mapstructure:"default_price"`
 }
 
 // RiskAnalyticsConfig controls the decision and risk engine.
@@ -333,6 +354,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.risk.max_positions", 5)
 	v.SetDefault("analytics.risk.max_trades_per_day", 20)
 	v.SetDefault("analytics.risk.default_quantity", 1)
+
+	v.SetDefault("execution.paper.enabled", true)
+	v.SetDefault("execution.paper.subscriber_buffer", 256)
+	v.SetDefault("execution.paper.slippage_percent", 0.05)
+	v.SetDefault("execution.paper.default_price", "market")
+
+	v.SetDefault("portfolio.enabled", true)
+	v.SetDefault("portfolio.subscriber_buffer", 256)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -479,6 +508,38 @@ func (c *Config) RiskEngineSettings() RiskEngineConfig {
 		MaxTradesPerDay:  c.Analytics.Risk.MaxTradesPerDay,
 		DefaultQuantity:  c.Analytics.Risk.DefaultQuantity,
 		DayResetTimezone: c.Calendar.Timezone,
+	}
+}
+
+// PaperExecutionEngineConfig is the validated paper execution configuration used by DI wiring.
+type PaperExecutionEngineConfig struct {
+	Enabled          bool
+	SubscriberBuffer int
+	SlippagePercent  float64
+	DefaultPrice     string
+}
+
+// PaperExecutionSettings maps execution paper settings.
+func (c *Config) PaperExecutionSettings() PaperExecutionEngineConfig {
+	return PaperExecutionEngineConfig{
+		Enabled:          c.Execution.Paper.Enabled,
+		SubscriberBuffer: c.Execution.Paper.SubscriberBuffer,
+		SlippagePercent:  c.Execution.Paper.SlippagePercent,
+		DefaultPrice:     c.Execution.Paper.DefaultPrice,
+	}
+}
+
+// PortfolioEngineConfig is the validated portfolio configuration used by DI wiring.
+type PortfolioEngineConfig struct {
+	Enabled          bool
+	SubscriberBuffer int
+}
+
+// PortfolioEngineSettings maps portfolio settings.
+func (c *Config) PortfolioEngineSettings() PortfolioEngineConfig {
+	return PortfolioEngineConfig{
+		Enabled:          c.Portfolio.Enabled,
+		SubscriberBuffer: c.Portfolio.SubscriberBuffer,
 	}
 }
 

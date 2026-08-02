@@ -134,3 +134,12 @@ analytics:
     min_confidence: 0.70
     max_positions: 5
     max_trades_per_day: 20
+
+execution:
+  paper:
+    enabled: true
+    slippage_percent: 0.05
+    default_price: market
+
+portfolio:
+  enabled: true

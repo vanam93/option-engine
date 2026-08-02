@@ -18,6 +18,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/core/metrics"
+	"github.com/vanam-gangireddy/option-engine/internal/execution/paper"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/postgres"
@@ -29,6 +30,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/market/snapshot"
 	"github.com/vanam-gangireddy/option-engine/internal/market/subscription"
 	"github.com/vanam-gangireddy/option-engine/internal/market/validator"
+	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
 )
 
@@ -54,6 +56,8 @@ type Container struct {
 	SignalEngine      *signal.Engine
 	StrategyEngine    *strategy.Engine
 	RiskEngine        *risk.Engine
+	PaperEngine       *paper.Engine
+	PortfolioEngine   *portfolio.Engine
 	Postgres          *postgres.Pool
 	HTTPServer       *http.Server
 	WSServer         *ws.Hub
@@ -179,6 +183,24 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("analytics risk engine: %w", err)
 	}
 
+	paperCfg, err := config.BuildPaperExecutionConfig(cfg.PaperExecutionSettings())
+	if err != nil {
+		return nil, fmt.Errorf("paper execution config: %w", err)
+	}
+	paperEngine, err := paper.New(paperCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("paper execution engine: %w", err)
+	}
+
+	portfolioCfg, err := config.BuildPortfolioEngineConfig(cfg.PortfolioEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("portfolio config: %w", err)
+	}
+	portfolioEngine, err := portfolio.New(portfolioCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("portfolio engine: %w", err)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -196,6 +218,8 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, signalEngine)
 	healthReporters = append(healthReporters, strategyEngine)
 	healthReporters = append(healthReporters, riskEngine)
+	healthReporters = append(healthReporters, paperEngine)
+	healthReporters = append(healthReporters, portfolioEngine)
 	healthReporters = append(healthReporters, &postgresHealthAdapter{pool: pool})
 
 	moduleLog := logger.WithModule(log, "bootstrap")
@@ -224,6 +248,8 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		SignalEngine:      signalEngine,
 		StrategyEngine:    strategyEngine,
 		RiskEngine:        riskEngine,
+		PaperEngine:       paperEngine,
+		PortfolioEngine:   portfolioEngine,
 		Postgres:          pool,
 		HTTPServer:       httpServer,
 		WSServer:         wsHub,
@@ -247,6 +273,16 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			symbols = append(symbols, inst.Symbol)
 		}
 		if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
+			return err
+		}
+	}
+	if c.PortfolioEngine != nil {
+		if err := c.PortfolioEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.PaperEngine != nil {
+		if err := c.PaperEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -298,6 +334,12 @@ func (c *Container) Close() {
 	}
 	if c.RiskEngine != nil {
 		_ = c.RiskEngine.Close()
+	}
+	if c.PaperEngine != nil {
+		_ = c.PaperEngine.Close()
+	}
+	if c.PortfolioEngine != nil {
+		_ = c.PortfolioEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()
