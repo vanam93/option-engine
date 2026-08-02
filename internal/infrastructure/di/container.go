@@ -33,6 +33,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/postgres"
 	"github.com/vanam-gangireddy/option-engine/internal/intelligence"
+	"github.com/vanam-gangireddy/option-engine/internal/aicontext"
 	"github.com/vanam-gangireddy/option-engine/internal/airesearch"
 	"github.com/vanam-gangireddy/option-engine/internal/laboratory"
 	"github.com/vanam-gangireddy/option-engine/internal/market/cache"
@@ -102,6 +103,7 @@ type Container struct {
 	BacktestRunnerEngine      *backtestrunner.Engine
 	LaboratoryEngine          *laboratory.Engine
 	AIResearchEngine          *airesearch.Engine
+	AIContextEngine           *aicontext.Engine
 	IntelligenceAPI           *api.Server
 	BacktestEngine            *backtest.Engine
 	Postgres                  *postgres.Pool
@@ -491,6 +493,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("airesearch engine: %w", err)
 	}
 
+	aiContextCfg, err := config.BuildAIContextEngineConfig(cfg.AIContextEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("aicontext config: %w", err)
+	}
+	aiContextEngine, err := aicontext.New(aiContextCfg, bus, clk, laboratoryEngine, aiResearchEngine.Repository())
+	if err != nil {
+		return nil, fmt.Errorf("aicontext engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -525,6 +536,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, backtestRunnerEngine)
 	healthReporters = append(healthReporters, laboratoryEngine)
 	healthReporters = append(healthReporters, aiResearchEngine)
+	healthReporters = append(healthReporters, aiContextEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -607,6 +619,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		BacktestRunnerEngine:      backtestRunnerEngine,
 		LaboratoryEngine:          laboratoryEngine,
 		AIResearchEngine:          aiResearchEngine,
+		AIContextEngine:           aiContextEngine,
 		IntelligenceAPI:           intelligenceAPI,
 		BacktestEngine:            backtestEngine,
 		Postgres:                  pool,
@@ -682,6 +695,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 	}
 	if c.AIResearchEngine != nil {
 		if err := c.AIResearchEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.AIContextEngine != nil {
+		if err := c.AIContextEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -855,6 +873,9 @@ func (c *Container) Close() {
 	}
 	if c.BacktestRunnerEngine != nil {
 		_ = c.BacktestRunnerEngine.Close()
+	}
+	if c.AIContextEngine != nil {
+		_ = c.AIContextEngine.Close()
 	}
 	if c.AIResearchEngine != nil {
 		_ = c.AIResearchEngine.Close()

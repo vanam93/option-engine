@@ -39,6 +39,7 @@ type Config struct {
 	BacktestRunner BacktestRunnerConfig `mapstructure:"backtest_runner"`
 	Laboratory     LaboratoryConfig     `mapstructure:"laboratory"`
 	AIResearch     AIResearchConfig     `mapstructure:"airesearch"`
+	AIContext      AIContextConfig      `mapstructure:"aicontext"`
 	API          APIConfig          `mapstructure:"api"`
 }
 
@@ -503,6 +504,11 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("airesearch.enabled", true)
 	v.SetDefault("airesearch.analyzer", "rule_based")
+
+	v.SetDefault("aicontext.enabled", true)
+	v.SetDefault("aicontext.executive_prompt", true)
+	v.SetDefault("aicontext.technical_prompt", true)
+	v.SetDefault("aicontext.json_prompt", true)
 
 	v.SetDefault("api.enabled", true)
 	v.SetDefault("api.prefix", "/api/v1")

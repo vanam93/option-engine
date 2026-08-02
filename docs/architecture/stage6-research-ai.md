@@ -792,3 +792,204 @@ Future LLM analyzers (`OpenAIAnalyzer`, `ClaudeAnalyzer`, `GeminiAnalyzer`, `Loc
 | Phase | Name | Status |
 |-------|------|--------|
 | 4 | AI Research Engine | ✅ Complete |
+
+---
+
+## Stage 6 Phase 5 — AI Context & Prompt Builder
+
+Phase 5 introduces the **AI Context & Prompt Builder** (`internal/aicontext`). This engine prepares complete, structured AI context from completed studies and research reports. It does **not** call any LLM, generate recommendations, or modify strategies. It converts research data into an optimized prompt package ready for future LLM providers.
+
+### Purpose
+
+Separate the research pipeline from LLM invocation:
+
+```text
+Research → Context Building → LLM (future)
+```
+
+The engine transforms study metrics and AI research reports into three deterministic prompt formats, enabling future LLM phases to consume standardized context without re-aggregating research data.
+
+### Architecture
+
+```text
+AI Research Engine (internal/airesearch)
+            ↓  study.ai.completed
+AI Context Builder (internal/aicontext)
+            ↓  study.ai.context.completed
+(Future) LLM Provider Integration
+```
+
+| File | Responsibility |
+|------|----------------|
+| `engine.go` | Lifecycle, subscribe, consume, build dispatch, publish, shutdown |
+| `builder.go` | Context assembly from study and report data |
+| `prompt.go` | Executive, technical, and JSON prompt rendering |
+| `templates.go` | Reusable prompt template constants |
+| `repository.go` | In-memory context storage and lookup |
+| `models.go` | Context models and section definitions |
+| `events.go` | `study.ai.context.completed` payloads |
+| `config.go` | Runtime configuration |
+| `health.go` | Observability counters |
+| `errors.go` | Structured errors |
+| `engine_test.go` | Generation, prompts, repository, publish, health, determinism tests |
+
+### Responsibilities
+
+| Responsibility | Detail |
+|----------------|--------|
+| Consume events | Only `study.ai.completed` |
+| Fetch data | Study from Strategy Laboratory, report from AI Research Engine |
+| Build context | Structured metadata, performance, risk, trade statistics, timeline |
+| Generate prompts | Executive, technical, and JSON formats |
+| Store contexts | In-memory repository with Get/Latest/List |
+| Publish events | `study.ai.context.completed` (append-only) |
+| Health | `ai_context_engine` metrics |
+| Read-only | Never calls LLM or modifies trading intelligence |
+
+### Context model
+
+Every context package includes:
+
+- Study metadata (strategy, parameters, symbols, timeframes, date range)
+- Performance summary (recommendations, confidence, returns, win/loss rates)
+- Optimization summary (per-session run counts)
+- Walk-forward summary (per-session run counts)
+- Monte Carlo summary (per-session run counts)
+- Risk metrics (alerts, loss rate, holding time, drawdown, confidence range)
+- Trade statistics (winning/losing trades, expectancy, profit factor)
+- Research report findings (executive summary, verdict, consistency, risk)
+- Timeline (study lifecycle events)
+- Key findings, strengths, weaknesses, future experiments
+
+### Prompt generation pipeline
+
+1. `study.ai.completed` event received with report and study IDs.
+2. Full study fetched from Strategy Laboratory via `StudySource`.
+3. Research report fetched from AI Research Engine via `ReportSource`.
+4. `ContextBuilder` aggregates metrics and assembles `AIContext`.
+5. Prompt sections built independently via templates:
+   - **Executive Prompt** — short summary for quick AI analysis
+   - **Technical Prompt** — complete report with all metrics
+   - **JSON Prompt** — machine-readable context, no markdown
+6. Context stored in repository.
+7. `study.ai.context.completed` published.
+
+### Prompt templates
+
+All prompt strings reside in `templates.go`. The engine and prompt builders reference template constants — no hardcoded strings in `engine.go`.
+
+| Template group | Purpose |
+|----------------|---------|
+| Executive | Header and compact summary body |
+| Technical | Section headers for metadata, performance, optimization, risk, trades, report, timeline |
+| JSON | Machine-readable envelope wrapper |
+| Section lines | Per-session detail, timeline entries, bullet lists |
+
+### Token optimization strategy
+
+| Technique | Implementation |
+|-----------|----------------|
+| Independent sections | Each prompt format built from shared context struct, not duplicated parsing |
+| No duplicate metrics | Executive prompt omits full technical sections |
+| Compressed metrics | `normalizeFloat` to 4 decimal places |
+| Stable ordering | Sorted symbols, timeframes, parameters, per-session lists |
+| Deterministic output | Same study + report + timestamp produces identical prompts |
+
+### Repository
+
+| Method | Description |
+|--------|-------------|
+| `Get(id)` | Lookup context by ID |
+| `Latest()` | Most recently generated context |
+| `List()` | All contexts in generation order |
+
+Protected by `sync.RWMutex`.
+
+### Event contract
+
+**Input:** `study.ai.completed` only
+
+**Output (append-only):** `study.ai.context.completed`
+
+```json
+{
+  "context_id": "CTX-20260802T103000-abc12345",
+  "report_id": "REP-20260802T100000-def67890",
+  "study_id": "STUDY-20260802T091500-abc12345",
+  "research_version": "v1",
+  "completed_at": "2026-08-02T10:30:00Z"
+}
+```
+
+### Configuration
+
+```yaml
+aicontext:
+  enabled: true
+  executive_prompt: true
+  technical_prompt: true
+  json_prompt: true
+```
+
+Individual prompt formats can be disabled independently. Context assembly still occurs; disabled formats produce empty prompt fields.
+
+### Health
+
+Component name: `ai_context_engine`
+
+| Metric | Description |
+|--------|-------------|
+| `contexts_generated` | Total contexts produced |
+| `contexts_cached` | Contexts stored in repository |
+| `average_generation_latency` | Mean context generation duration |
+| `publish_failures` | Failed event publish attempts |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Engine state | `sync.Mutex` |
+| Repository | `sync.RWMutex` |
+| Event subscription | Single consumer goroutine |
+
+Every goroutine accepts `context.Context` and terminates on shutdown. No goroutine leaks.
+
+### Failure handling
+
+- Missing study or report data on `study.ai.completed` is silently skipped.
+- Build failures do not publish events or increment counters.
+- Publish failures increment `publish_failures` health metric.
+- Shutdown cancels subscription context and waits for consumer goroutine.
+
+### Future LLM integration
+
+Future LLM provider phases (`OpenAIAnalyzer`, `ClaudeAnalyzer`, `GeminiAnalyzer`, `LocalLLMAnalyzer`) **must** consume context from this engine's repository or `study.ai.context.completed` events. They receive pre-built executive, technical, or JSON prompts without re-aggregating study data.
+
+The separation ensures:
+
+```text
+Strategy Laboratory → AI Research Engine → AI Context Builder → LLM Provider
+```
+
+Each stage has a single responsibility. LLM phases replace only the final invocation layer.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Context generation | Full context assembly from study and report |
+| Executive prompt | Short summary format without technical sections |
+| Technical prompt | Complete metrics across all sections |
+| JSON prompt | Machine-readable format, no markdown |
+| Deterministic output | Identical prompts from identical input |
+| Repository lookup | Get/Latest/List |
+| Event publish | `study.ai.context.completed` emission |
+| Event isolation | Ignores non-study.ai.completed events |
+| Health metrics | Counters after context generation |
+| Graceful shutdown | Clean close without goroutine leak |
+
+### Phase 5 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 5 | AI Context & Prompt Builder | ✅ Complete |

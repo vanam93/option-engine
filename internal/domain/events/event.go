@@ -50,6 +50,7 @@ const (
 	StudyCompleted                    Type = "study.completed"
 	StudyCompared                     Type = "study.compared"
 	StudyAICompleted                  Type = "study.ai.completed"
+	StudyAIContextCompleted           Type = "study.ai.context.completed"
 )
 
 // Event is the universal envelope for all system events.

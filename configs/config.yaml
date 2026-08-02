@@ -290,6 +290,12 @@ airesearch:
   enabled: true
   analyzer: rule_based
 
+aicontext:
+  enabled: true
+  executive_prompt: true
+  technical_prompt: true
+  json_prompt: true
+
 api:
   enabled: true
   prefix: /api/v1
