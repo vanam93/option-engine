@@ -21,13 +21,13 @@ type applyResult struct {
 
 // Cache stores positions, trade history, and PnL summaries.
 type Cache struct {
-	mu             sync.Mutex
-	positions      map[seriesKey]*positionState
-	trades         []TradeRecord
+	mu              sync.Mutex
+	positions       map[seriesKey]*positionState
+	trades          []TradeRecord
 	realizedTotal   float64
 	unrealizedTotal float64
-	exposure       float64
-	referencePrice map[string]float64
+	exposure        float64
+	referencePrice  map[string]float64
 }
 
 // NewCache creates portfolio state storage.

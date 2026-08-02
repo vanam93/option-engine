@@ -101,9 +101,9 @@ func (b *barBuilder) hasTicks() bool {
 
 // UpdateStats records aggregation counters for observability.
 type UpdateStats struct {
-	Closed    int
-	Rejected  int
-	Evicted   int
+	Closed   int
+	Rejected int
+	Evicted  int
 }
 
 // Aggregator maintains in-progress candles per symbol and timeframe.

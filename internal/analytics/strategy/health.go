@@ -54,14 +54,14 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64) heal
 		LastEventTime: last,
 		Message:       "strategy decision engine",
 		Details: map[string]string{
-			"enabled":              boolString(cfg.Enabled),
-			"strategies_enabled":   joinStrings(cfg.EnabledStrategies()),
-			"decisions_generated":  u64String(h.generated.Load()),
-			"long_entries":         u64String(h.longEntry.Load()),
-			"short_entries":        u64String(h.shortEntry.Load()),
-			"exits":                u64String(h.exits.Load()),
-			"holds":                u64String(h.holds.Load()),
-			"dropped":              u64String(dropped),
+			"enabled":             boolString(cfg.Enabled),
+			"strategies_enabled":  joinStrings(cfg.EnabledStrategies()),
+			"decisions_generated": u64String(h.generated.Load()),
+			"long_entries":        u64String(h.longEntry.Load()),
+			"short_entries":       u64String(h.shortEntry.Load()),
+			"exits":               u64String(h.exits.Load()),
+			"holds":               u64String(h.holds.Load()),
+			"dropped":             u64String(dropped),
 		},
 	}
 }

@@ -30,10 +30,10 @@ type macdCrossState struct {
 
 // Cache stores minimal state required for crossover detection.
 type Cache struct {
-	mu          sync.Mutex
-	emaValues   map[emaPeriodKey]float64
-	emaCross    map[seriesKey]*emaCrossState
-	macdCross   map[seriesKey]*macdCrossState
+	mu        sync.Mutex
+	emaValues map[emaPeriodKey]float64
+	emaCross  map[seriesKey]*emaCrossState
+	macdCross map[seriesKey]*macdCrossState
 }
 
 // NewCache creates signal evaluation state storage.

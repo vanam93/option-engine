@@ -14,12 +14,12 @@ type Period struct {
 
 // Window describes a single walk-forward train/validation split.
 type Window struct {
-	Index            int
-	WalkForwardID    string
-	TrainStart       time.Time
-	TrainEnd         time.Time
-	ValidationStart  time.Time
-	ValidationEnd    time.Time
+	Index           int
+	WalkForwardID   string
+	TrainStart      time.Time
+	TrainEnd        time.Time
+	ValidationStart time.Time
+	ValidationEnd   time.Time
 }
 
 // TrainPeriod returns the training period for this window.

@@ -43,11 +43,11 @@ type TradeRecord struct {
 
 // PortfolioUpdated is the payload published on portfolio.updated events.
 type PortfolioUpdated struct {
-	Symbol        string     `json:"symbol"`
-	Position      *Position  `json:"position,omitempty"`
-	RealizedPnL   float64    `json:"realized_pnl"`
-	UnrealizedPnL float64    `json:"unrealized_pnl"`
-	Timestamp     time.Time  `json:"timestamp"`
+	Symbol        string    `json:"symbol"`
+	Position      *Position `json:"position,omitempty"`
+	RealizedPnL   float64   `json:"realized_pnl"`
+	UnrealizedPnL float64   `json:"unrealized_pnl"`
+	Timestamp     time.Time `json:"timestamp"`
 }
 
 // PortfolioState is an immutable snapshot of portfolio state.

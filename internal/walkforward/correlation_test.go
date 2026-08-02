@@ -71,7 +71,7 @@ func ExperimentRunFixture(window Window) experiments.ExperimentRun {
 		Symbol:       "NIFTY",
 		Timeframe:    "5m",
 		Parameters: experiments.ParameterSet{
-			"run_id": runID,
+			"run_id":   runID,
 			"ema_fast": 5,
 		},
 	}

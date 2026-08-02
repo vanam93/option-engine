@@ -10,7 +10,7 @@ import (
 type OptimizationConfig struct {
 	Enabled          bool                      `mapstructure:"enabled"`
 	SubscriberBuffer int                       `mapstructure:"subscriber_buffer"`
-	Scoring          OptimizationScoringConfig   `mapstructure:"scoring"`
+	Scoring          OptimizationScoringConfig `mapstructure:"scoring"`
 }
 
 // OptimizationScoringConfig holds scoring weight configuration.

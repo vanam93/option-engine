@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	httpserver "github.com/vanam-gangireddy/option-engine/internal/adapters/http"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestHealthEndpoint(t *testing.T) {

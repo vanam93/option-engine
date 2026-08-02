@@ -45,13 +45,13 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, cach
 		LastEventTime: last,
 		Message:       "walk-forward analysis engine",
 		Details: map[string]string{
-			"enabled":             boolString(cfg.Enabled),
-			"windows_created":     u64String(uint64(cache.windowsCreated())),
-			"windows_completed":   u64String(uint64(cache.windowsCompleted())),
-			"active_windows":      u64String(uint64(activeWindows)),
-			"validation_runs":     u64String(uint64(cache.validationRuns())),
-			"reports_generated":   u64String(h.reports.Load()),
-			"dropped":             u64String(dropped),
+			"enabled":           boolString(cfg.Enabled),
+			"windows_created":   u64String(uint64(cache.windowsCreated())),
+			"windows_completed": u64String(uint64(cache.windowsCompleted())),
+			"active_windows":    u64String(uint64(activeWindows)),
+			"validation_runs":   u64String(uint64(cache.validationRuns())),
+			"reports_generated": u64String(h.reports.Load()),
+			"dropped":           u64String(dropped),
 		},
 	}
 }

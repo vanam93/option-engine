@@ -19,14 +19,14 @@ const (
 
 // GeneratedSignal is the payload published on SignalGenerated events.
 type GeneratedSignal struct {
-	ID          uuid.UUID          `json:"id"`
-	Symbol      string             `json:"symbol"`
-	Timeframe   string             `json:"timeframe"`
-	Signal      Type               `json:"signal"`
-	Strategy    string             `json:"strategy"`
-	Confidence  float64            `json:"confidence"`
-	Timestamp   time.Time          `json:"timestamp"`
-	Indicators  map[string]float64 `json:"indicators"`
+	ID         uuid.UUID          `json:"id"`
+	Symbol     string             `json:"symbol"`
+	Timeframe  string             `json:"timeframe"`
+	Signal     Type               `json:"signal"`
+	Strategy   string             `json:"strategy"`
+	Confidence float64            `json:"confidence"`
+	Timestamp  time.Time          `json:"timestamp"`
+	Indicators map[string]float64 `json:"indicators"`
 }
 
 func newGeneratedSignal(

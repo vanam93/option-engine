@@ -8,11 +8,11 @@ import (
 )
 
 type healthSnapshot struct {
-	started         atomic.Uint64
-	completed       atomic.Uint64
-	reports         atomic.Uint64
-	totalRuntimeMs  atomic.Uint64
-	lastEvent       atomic.Value // time.Time
+	started        atomic.Uint64
+	completed      atomic.Uint64
+	reports        atomic.Uint64
+	totalRuntimeMs atomic.Uint64
+	lastEvent      atomic.Value // time.Time
 }
 
 func (h *healthSnapshot) recordStarted() {
@@ -60,14 +60,14 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, cach
 		LastEventTime: last,
 		Message:       "monte carlo simulation engine",
 		Details: map[string]string{
-			"enabled":                boolString(cfg.Enabled),
-			"simulations_started":    u64String(h.started.Load()),
-			"simulations_completed":  u64String(h.completed.Load()),
-			"reports_generated":      u64String(h.reports.Load()),
-			"active_jobs":            u64String(uint64(cache.activeJobs())),
-			"average_runtime_ms":     u64String(h.averageRuntimeMs()),
-			"dropped":                u64String(dropped),
-			"completed_simulations":  u64String(uint64(cache.completedCount())),
+			"enabled":               boolString(cfg.Enabled),
+			"simulations_started":   u64String(h.started.Load()),
+			"simulations_completed": u64String(h.completed.Load()),
+			"reports_generated":     u64String(h.reports.Load()),
+			"active_jobs":           u64String(uint64(cache.activeJobs())),
+			"average_runtime_ms":    u64String(h.averageRuntimeMs()),
+			"dropped":               u64String(dropped),
+			"completed_simulations": u64String(uint64(cache.completedCount())),
 		},
 	}
 }

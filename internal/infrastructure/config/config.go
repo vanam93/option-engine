@@ -118,10 +118,10 @@ type SymbolsConfig struct {
 
 // AnalyticsConfig groups Stage 3 analytics engine settings.
 type AnalyticsConfig struct {
-	Candle    CandleAnalyticsConfig    `mapstructure:"candle"`
-	Indicator IndicatorAnalyticsConfig `mapstructure:"indicator"`
-	Signal    SignalAnalyticsConfig    `mapstructure:"signal"`
-	Strategy  StrategyAnalyticsConfig  `mapstructure:"strategy"`
+	Candle      CandleAnalyticsConfig      `mapstructure:"candle"`
+	Indicator   IndicatorAnalyticsConfig   `mapstructure:"indicator"`
+	Signal      SignalAnalyticsConfig      `mapstructure:"signal"`
+	Strategy    StrategyAnalyticsConfig    `mapstructure:"strategy"`
 	Risk        RiskAnalyticsConfig        `mapstructure:"risk"`
 	Performance PerformanceAnalyticsConfig `mapstructure:"performance"`
 }
@@ -162,12 +162,12 @@ type BollingerSignalConfig struct {
 
 // StrategyAnalyticsConfig controls the strategy decision engine.
 type StrategyAnalyticsConfig struct {
-	Enabled          bool                            `mapstructure:"enabled"`
-	SubscriberBuffer int                             `mapstructure:"subscriber_buffer"`
-	MinConfidence    float64                         `mapstructure:"min_confidence"`
-	TrendFollowing   TrendFollowingAnalyticsConfig   `mapstructure:"trend_following"`
-	MeanReversion    MeanReversionAnalyticsConfig    `mapstructure:"mean_reversion"`
-	Breakout         BreakoutAnalyticsConfig         `mapstructure:"breakout"`
+	Enabled          bool                          `mapstructure:"enabled"`
+	SubscriberBuffer int                           `mapstructure:"subscriber_buffer"`
+	MinConfidence    float64                       `mapstructure:"min_confidence"`
+	TrendFollowing   TrendFollowingAnalyticsConfig `mapstructure:"trend_following"`
+	MeanReversion    MeanReversionAnalyticsConfig  `mapstructure:"mean_reversion"`
+	Breakout         BreakoutAnalyticsConfig       `mapstructure:"breakout"`
 }
 
 // TrendFollowingAnalyticsConfig enables the trend-following strategy.
@@ -222,13 +222,13 @@ type PerformanceAnalyticsConfig struct {
 
 // IndicatorAnalyticsConfig controls the indicator computation engine.
 type IndicatorAnalyticsConfig struct {
-	Enabled          bool                   `mapstructure:"enabled"`
-	SubscriberBuffer int                    `mapstructure:"subscriber_buffer"`
+	Enabled          bool                     `mapstructure:"enabled"`
+	SubscriberBuffer int                      `mapstructure:"subscriber_buffer"`
 	EMA              []IndicatorPeriodConfig  `mapstructure:"ema"`
 	SMA              []IndicatorPeriodConfig  `mapstructure:"sma"`
 	RSI              []IndicatorPeriodConfig  `mapstructure:"rsi"`
 	ATR              []IndicatorPeriodConfig  `mapstructure:"atr"`
-	MACD             MACDAnalyticsConfig    `mapstructure:"macd"`
+	MACD             MACDAnalyticsConfig      `mapstructure:"macd"`
 	Bollinger        BollingerAnalyticsConfig `mapstructure:"bollinger"`
 }
 

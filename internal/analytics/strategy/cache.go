@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	signalEMACross   = "ema_cross"
-	signalMACDCross  = "macd_cross"
-	signalRSI        = "rsi"
-	signalBollinger  = "bollinger"
+	signalEMACross  = "ema_cross"
+	signalMACDCross = "macd_cross"
+	signalRSI       = "rsi"
+	signalBollinger = "bollinger"
 )
 
 const (
@@ -39,10 +39,10 @@ type storedSignal struct {
 }
 
 type seriesState struct {
-	position         positionState
-	lastDecision     Decision
-	lastDecisionAt   time.Time
-	signals          map[string]storedSignal
+	position       positionState
+	lastDecision   Decision
+	lastDecisionAt time.Time
+	signals        map[string]storedSignal
 }
 
 // Cache stores minimal per-series state for strategy evaluation.

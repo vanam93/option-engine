@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	strategyEMACross   = "ema_cross"
-	strategyMACDCross  = "macd_cross"
-	strategyRSI        = "rsi"
-	strategyBollinger  = "bollinger"
+	strategyEMACross  = "ema_cross"
+	strategyMACDCross = "macd_cross"
+	strategyRSI       = "rsi"
+	strategyBollinger = "bollinger"
 )
 
 const (

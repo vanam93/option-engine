@@ -72,13 +72,13 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, acti
 		LastEventTime: last,
 		Message:       "decision and risk engine",
 		Details: map[string]string{
-			"enabled":             boolString(cfg.Enabled),
-			"decisions_received":  u64String(h.received.Load()),
-			"approved_trades":     u64String(h.approved.Load()),
-			"rejected_trades":     u64String(h.rejected.Load()),
-			"active_positions":    u64String(uint64(activePositions)),
-			"rejection_reasons":   h.rejections.summary(),
-			"dropped":             u64String(dropped),
+			"enabled":            boolString(cfg.Enabled),
+			"decisions_received": u64String(h.received.Load()),
+			"approved_trades":    u64String(h.approved.Load()),
+			"rejected_trades":    u64String(h.rejected.Load()),
+			"active_positions":   u64String(uint64(activePositions)),
+			"rejection_reasons":  h.rejections.summary(),
+			"dropped":            u64String(dropped),
 		},
 	}
 }

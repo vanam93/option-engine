@@ -8,9 +8,9 @@ import (
 )
 
 type healthSnapshot struct {
-	processed  atomic.Uint64
-	snapshots  atomic.Uint64
-	lastEvent  atomic.Value // time.Time
+	processed atomic.Uint64
+	snapshots atomic.Uint64
+	lastEvent atomic.Value // time.Time
 }
 
 func (h *healthSnapshot) record(at time.Time) {
@@ -49,13 +49,13 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, cach
 		LastEventTime: last,
 		Message:       "performance analytics engine",
 		Details: map[string]string{
-			"enabled":              boolString(cfg.Enabled),
-			"trades_processed":     u64String(uint64(tradesProcessed)),
-			"snapshots_generated":  u64String(uint64(snapshotsGenerated)),
-			"total_pnl":            f64String(totalPnL),
-			"current_drawdown":     f64String(currentDrawdown),
-			"events_processed":     u64String(h.processed.Load()),
-			"dropped":              u64String(dropped),
+			"enabled":             boolString(cfg.Enabled),
+			"trades_processed":    u64String(uint64(tradesProcessed)),
+			"snapshots_generated": u64String(uint64(snapshotsGenerated)),
+			"total_pnl":           f64String(totalPnL),
+			"current_drawdown":    f64String(currentDrawdown),
+			"events_processed":    u64String(h.processed.Load()),
+			"dropped":             u64String(dropped),
 		},
 	}
 }

@@ -4,18 +4,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
-	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
+	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 )
 
 func TestCalendarTradingDay(t *testing.T) {
 	cfg := calendar.Config{
-		Timezone:     "Asia/Kolkata",
-		RegularOpen:  "09:15",
-		RegularClose: "15:30",
-		Holidays:     []string{"2024-01-26"},
+		Timezone:      "Asia/Kolkata",
+		RegularOpen:   "09:15",
+		RegularClose:  "15:30",
+		Holidays:      []string{"2024-01-26"},
 		ExpiryWeekday: time.Thursday,
 	}
 	cal, err := calendar.New(cfg, clock.NewSystem())

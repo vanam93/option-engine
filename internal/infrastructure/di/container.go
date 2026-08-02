@@ -42,37 +42,37 @@ import (
 
 // Container holds all wired dependencies.
 type Container struct {
-	Config           *config.Config
-	Logger           *slog.Logger
-	Clock            clock.Clock
-	Calendar         *calendar.Calendar
-	Metrics          metrics.Registry
-	SymbolRegistry   *symbolregistry.Registry
-	ProviderRegistry *providers.Registry
-	ProviderManager  *providers.Manager
-	Cache            *cache.Cache
-	EventBus         *eventbus.Bus
-	Gateway          *gateway.Engine
-	Normalizer       *normalizer.Normalizer
-	Validator        *validator.Validator
-	Snapshot         func(time.Time) snapshot.Market
-	Subscription     *subscription.Manager
-	CandleEngine      *candle.Engine
-	IndicatorEngine   *indicator.Engine
-	SignalEngine      *signal.Engine
-	StrategyEngine    *strategy.Engine
-	RiskEngine        *risk.Engine
-	PaperEngine         *paper.Engine
-	PortfolioEngine     *portfolio.Engine
-	PerformanceEngine   *performance.Engine
-	OptimizationEngine  *optimization.Engine
-	ExperimentEngine    *experiments.Engine
-	WalkForwardEngine   *walkforward.Engine
-	MonteCarloEngine    *montecarlo.Engine
-	BacktestEngine      *backtest.Engine
-	Postgres            *postgres.Pool
-	HTTPServer       *http.Server
-	WSServer         *ws.Hub
+	Config             *config.Config
+	Logger             *slog.Logger
+	Clock              clock.Clock
+	Calendar           *calendar.Calendar
+	Metrics            metrics.Registry
+	SymbolRegistry     *symbolregistry.Registry
+	ProviderRegistry   *providers.Registry
+	ProviderManager    *providers.Manager
+	Cache              *cache.Cache
+	EventBus           *eventbus.Bus
+	Gateway            *gateway.Engine
+	Normalizer         *normalizer.Normalizer
+	Validator          *validator.Validator
+	Snapshot           func(time.Time) snapshot.Market
+	Subscription       *subscription.Manager
+	CandleEngine       *candle.Engine
+	IndicatorEngine    *indicator.Engine
+	SignalEngine       *signal.Engine
+	StrategyEngine     *strategy.Engine
+	RiskEngine         *risk.Engine
+	PaperEngine        *paper.Engine
+	PortfolioEngine    *portfolio.Engine
+	PerformanceEngine  *performance.Engine
+	OptimizationEngine *optimization.Engine
+	ExperimentEngine   *experiments.Engine
+	WalkForwardEngine  *walkforward.Engine
+	MonteCarloEngine   *montecarlo.Engine
+	BacktestEngine     *backtest.Engine
+	Postgres           *postgres.Pool
+	HTTPServer         *http.Server
+	WSServer           *ws.Hub
 }
 
 // NewContainer wires all application dependencies.
@@ -324,37 +324,37 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	wsHub := ws.NewHub(cfg, logger.WithModule(log, "websocket"))
 
 	return &Container{
-		Config:           cfg,
-		Logger:           log,
-		Clock:            clk,
-		Calendar:         cal,
-		Metrics:          metricReg,
-		SymbolRegistry:   symbols,
-		ProviderRegistry: providerReg,
-		ProviderManager:  manager,
-		Cache:            cacheStore,
-		EventBus:         bus,
-		Gateway:          gatewayEngine,
-		Normalizer:       normalizerSvc,
-		Validator:        validatorSvc,
-		Snapshot:         snapshotBuilder,
-		Subscription:     subManager,
-		CandleEngine:      candleEngine,
-		IndicatorEngine:   indicatorEngine,
-		SignalEngine:      signalEngine,
-		StrategyEngine:    strategyEngine,
-		RiskEngine:        riskEngine,
-		PaperEngine:         paperEngine,
-		PortfolioEngine:     portfolioEngine,
-		PerformanceEngine:   performanceEngine,
-		OptimizationEngine:  optimizationEngine,
-		ExperimentEngine:    experimentEngine,
-		WalkForwardEngine:   walkForwardEngine,
-		MonteCarloEngine:    monteCarloEngine,
-		BacktestEngine:      backtestEngine,
-		Postgres:            pool,
-		HTTPServer:       httpServer,
-		WSServer:         wsHub,
+		Config:             cfg,
+		Logger:             log,
+		Clock:              clk,
+		Calendar:           cal,
+		Metrics:            metricReg,
+		SymbolRegistry:     symbols,
+		ProviderRegistry:   providerReg,
+		ProviderManager:    manager,
+		Cache:              cacheStore,
+		EventBus:           bus,
+		Gateway:            gatewayEngine,
+		Normalizer:         normalizerSvc,
+		Validator:          validatorSvc,
+		Snapshot:           snapshotBuilder,
+		Subscription:       subManager,
+		CandleEngine:       candleEngine,
+		IndicatorEngine:    indicatorEngine,
+		SignalEngine:       signalEngine,
+		StrategyEngine:     strategyEngine,
+		RiskEngine:         riskEngine,
+		PaperEngine:        paperEngine,
+		PortfolioEngine:    portfolioEngine,
+		PerformanceEngine:  performanceEngine,
+		OptimizationEngine: optimizationEngine,
+		ExperimentEngine:   experimentEngine,
+		WalkForwardEngine:  walkForwardEngine,
+		MonteCarloEngine:   monteCarloEngine,
+		BacktestEngine:     backtestEngine,
+		Postgres:           pool,
+		HTTPServer:         httpServer,
+		WSServer:           wsHub,
 	}, nil
 }
 

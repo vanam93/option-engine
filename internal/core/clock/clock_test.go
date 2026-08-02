@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/stretchr/testify/assert"
+	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 )
 
 func TestSystemClock(t *testing.T) {

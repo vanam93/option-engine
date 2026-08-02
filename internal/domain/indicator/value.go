@@ -25,10 +25,10 @@ const (
 
 // IndicatorValue is a typed output from the TA engine.
 type IndicatorValue struct {
-	ID        uuid.UUID         `json:"id"`
-	Name      Name              `json:"name"`
-	Symbol    string            `json:"symbol"`
-	Timeframe string            `json:"timeframe"`
-	Values    map[string]float64 `json:"values"`
-	ComputedAt time.Time        `json:"computed_at"`
+	ID         uuid.UUID          `json:"id"`
+	Name       Name               `json:"name"`
+	Symbol     string             `json:"symbol"`
+	Timeframe  string             `json:"timeframe"`
+	Values     map[string]float64 `json:"values"`
+	ComputedAt time.Time          `json:"computed_at"`
 }

@@ -8,14 +8,14 @@ import (
 
 // ExperimentsConfig groups Stage 4 experiment engine settings.
 type ExperimentsConfig struct {
-	Enabled           bool                          `mapstructure:"enabled"`
-	ParallelWorkers   int                           `mapstructure:"parallel_workers"`
-	MaxConcurrentRuns int                           `mapstructure:"max_concurrent_runs"`
-	SubscriberBuffer  int                           `mapstructure:"subscriber_buffer"`
-	Symbols           []string                      `mapstructure:"symbols"`
-	Timeframes        []string                      `mapstructure:"timeframes"`
-	Strategy          string                        `mapstructure:"strategy"`
-	ParameterRanges   experiments.ParameterRanges   `mapstructure:"parameter_ranges"`
+	Enabled           bool                        `mapstructure:"enabled"`
+	ParallelWorkers   int                         `mapstructure:"parallel_workers"`
+	MaxConcurrentRuns int                         `mapstructure:"max_concurrent_runs"`
+	SubscriberBuffer  int                         `mapstructure:"subscriber_buffer"`
+	Symbols           []string                    `mapstructure:"symbols"`
+	Timeframes        []string                    `mapstructure:"timeframes"`
+	Strategy          string                      `mapstructure:"strategy"`
+	ParameterRanges   experiments.ParameterRanges `mapstructure:"parameter_ranges"`
 }
 
 // ExperimentsEngineConfig is the validated experiment configuration used by DI wiring.

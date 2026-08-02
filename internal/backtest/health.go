@@ -18,13 +18,13 @@ const (
 )
 
 type replayMetrics struct {
-	status         atomic.Value // ReplayStatus
-	position       atomic.Uint64
-	total          atomic.Uint64
-	processed      atomic.Uint64
-	symbolsLoaded  atomic.Uint64
-	connected      atomic.Bool
-	lastEvent      atomic.Value // time.Time
+	status        atomic.Value // ReplayStatus
+	position      atomic.Uint64
+	total         atomic.Uint64
+	processed     atomic.Uint64
+	symbolsLoaded atomic.Uint64
+	connected     atomic.Bool
+	lastEvent     atomic.Value // time.Time
 }
 
 func newReplayMetrics() *replayMetrics {

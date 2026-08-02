@@ -4,16 +4,16 @@ import "fmt"
 
 // ParameterRanges defines discrete sweep values per dimension.
 type ParameterRanges struct {
-	EMAFast         []int     `mapstructure:"ema_fast"`
-	EMASlow         []int     `mapstructure:"ema_slow"`
-	RSIPeriod       []int     `mapstructure:"rsi_period"`
-	RSIOverbought   []float64 `mapstructure:"rsi_overbought"`
-	RSIOversold     []float64 `mapstructure:"rsi_oversold"`
-	MACDFast        []int     `mapstructure:"macd_fast"`
-	MACDSlow        []int     `mapstructure:"macd_slow"`
-	MACDSignal      []int     `mapstructure:"macd_signal"`
-	MinConfidence   []float64 `mapstructure:"min_confidence"`
-	MaxPositions    []int     `mapstructure:"max_positions"`
+	EMAFast       []int     `mapstructure:"ema_fast"`
+	EMASlow       []int     `mapstructure:"ema_slow"`
+	RSIPeriod     []int     `mapstructure:"rsi_period"`
+	RSIOverbought []float64 `mapstructure:"rsi_overbought"`
+	RSIOversold   []float64 `mapstructure:"rsi_oversold"`
+	MACDFast      []int     `mapstructure:"macd_fast"`
+	MACDSlow      []int     `mapstructure:"macd_slow"`
+	MACDSignal    []int     `mapstructure:"macd_signal"`
+	MinConfidence []float64 `mapstructure:"min_confidence"`
+	MaxPositions  []int     `mapstructure:"max_positions"`
 }
 
 // Config controls the experiment and parameter sweep engine.

@@ -144,12 +144,12 @@ func (e *Engine) Close() error {
 // ProviderConfig maps engine settings into provider factory configuration.
 func (e *Engine) ProviderConfig() map[string]any {
 	return map[string]any{
-		"speed":       e.cfg.Speed,
-		"symbols":     append([]string(nil), e.cfg.Symbols...),
-		"start_time":  formatTime(e.cfg.StartTime),
-		"end_time":    formatTime(e.cfg.EndTime),
-		"data_path":   e.cfg.DataPath,
-		"timeframe":   string(e.cfg.Timeframe),
+		"speed":      e.cfg.Speed,
+		"symbols":    append([]string(nil), e.cfg.Symbols...),
+		"start_time": formatTime(e.cfg.StartTime),
+		"end_time":   formatTime(e.cfg.EndTime),
+		"data_path":  e.cfg.DataPath,
+		"timeframe":  string(e.cfg.Timeframe),
 	}
 }
 

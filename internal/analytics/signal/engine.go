@@ -8,8 +8,8 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
-	domainindicator "github.com/vanam-gangireddy/option-engine/internal/domain/indicator"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	domainindicator "github.com/vanam-gangireddy/option-engine/internal/domain/indicator"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 )
 

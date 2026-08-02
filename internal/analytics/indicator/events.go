@@ -26,14 +26,14 @@ func newIndicatorValue(name domainindicator.Name, candle market.Candle, period i
 
 func newMACDIndicatorValue(candle market.Candle, cfg *MACDConfig, result indicators.MACDResult) domainindicator.IndicatorValue {
 	values := map[string]float64{
-		"macd":           result.MACD,
-		"signal":         result.Signal,
-		"histogram":      result.Histogram,
-		"fast_period":    float64(cfg.FastPeriod),
-		"slow_period":    float64(cfg.SlowPeriod),
-		"signal_period":  float64(cfg.SignalPeriod),
-		"warmed_up":      1,
-		"sample_count":   float64(result.Samples),
+		"macd":          result.MACD,
+		"signal":        result.Signal,
+		"histogram":     result.Histogram,
+		"fast_period":   float64(cfg.FastPeriod),
+		"slow_period":   float64(cfg.SlowPeriod),
+		"signal_period": float64(cfg.SignalPeriod),
+		"warmed_up":     1,
+		"sample_count":  float64(result.Samples),
 	}
 	return domainindicator.IndicatorValue{
 		ID:         uuid.New(),

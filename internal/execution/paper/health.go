@@ -47,12 +47,12 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, acti
 		LastEventTime: last,
 		Message:       "paper execution engine",
 		Details: map[string]string{
-			"enabled":           boolString(cfg.Enabled),
-			"orders_received":     u64String(h.received.Load()),
-			"orders_filled":       u64String(h.filled.Load()),
-			"orders_rejected":     u64String(h.rejected.Load()),
-			"active_positions":    u64String(uint64(activePositions)),
-			"dropped":             u64String(dropped),
+			"enabled":          boolString(cfg.Enabled),
+			"orders_received":  u64String(h.received.Load()),
+			"orders_filled":    u64String(h.filled.Load()),
+			"orders_rejected":  u64String(h.rejected.Load()),
+			"active_positions": u64String(uint64(activePositions)),
+			"dropped":          u64String(dropped),
 		},
 	}
 }

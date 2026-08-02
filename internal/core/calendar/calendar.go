@@ -11,24 +11,24 @@ import (
 type SessionType string
 
 const (
-	SessionRegular  SessionType = "regular"
-	SessionMuhurat  SessionType = "muhurat"
+	SessionRegular    SessionType = "regular"
+	SessionMuhurat    SessionType = "muhurat"
 	SessionEarlyClose SessionType = "early_close"
-	SessionHoliday  SessionType = "holiday"
+	SessionHoliday    SessionType = "holiday"
 )
 
 // Config holds NSE calendar configuration. All values are config-driven.
 type Config struct {
-	Timezone      string            `mapstructure:"timezone"`
-	RegularOpen   string            `mapstructure:"regular_open"`   // HH:MM
-	RegularClose  string            `mapstructure:"regular_close"`  // HH:MM
-	MuhuratOpen   string            `mapstructure:"muhurat_open"`
-	MuhuratClose  string            `mapstructure:"muhurat_close"`
-	EarlyCloseAt  string            `mapstructure:"early_close_at"`
-	Holidays      []string          `mapstructure:"holidays"`       // YYYY-MM-DD
-	MuhuratDays   []string          `mapstructure:"muhurat_days"`   // YYYY-MM-DD
-	EarlyCloseDays []string         `mapstructure:"early_close_days"`
-	ExpiryWeekday time.Weekday      `mapstructure:"expiry_weekday"` // Thursday = 4
+	Timezone       string       `mapstructure:"timezone"`
+	RegularOpen    string       `mapstructure:"regular_open"`  // HH:MM
+	RegularClose   string       `mapstructure:"regular_close"` // HH:MM
+	MuhuratOpen    string       `mapstructure:"muhurat_open"`
+	MuhuratClose   string       `mapstructure:"muhurat_close"`
+	EarlyCloseAt   string       `mapstructure:"early_close_at"`
+	Holidays       []string     `mapstructure:"holidays"`     // YYYY-MM-DD
+	MuhuratDays    []string     `mapstructure:"muhurat_days"` // YYYY-MM-DD
+	EarlyCloseDays []string     `mapstructure:"early_close_days"`
+	ExpiryWeekday  time.Weekday `mapstructure:"expiry_weekday"` // Thursday = 4
 }
 
 // Calendar knows NSE trading sessions, holidays, and expiry rules.

@@ -14,13 +14,13 @@ const (
 
 // Report is the standard health payload for every major component.
 type Report struct {
-	Component      string     `json:"component"`
-	Status         Status     `json:"status"`
-	Latency        int64      `json:"latency_ms"`
-	Connected      bool       `json:"connected"`
-	ReconnectCount int64      `json:"reconnect_count"`
-	LastEventTime  *time.Time `json:"last_event_time,omitempty"`
-	Message        string     `json:"message,omitempty"`
+	Component      string            `json:"component"`
+	Status         Status            `json:"status"`
+	Latency        int64             `json:"latency_ms"`
+	Connected      bool              `json:"connected"`
+	ReconnectCount int64             `json:"reconnect_count"`
+	LastEventTime  *time.Time        `json:"last_event_time,omitempty"`
+	Message        string            `json:"message,omitempty"`
 	Details        map[string]string `json:"details,omitempty"`
 }
 

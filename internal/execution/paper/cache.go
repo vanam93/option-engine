@@ -25,21 +25,21 @@ const (
 )
 
 type position struct {
-	Symbol         string
-	Timeframe      string
-	Side           positionSide
-	Quantity       int
-	EntryPrice     float64
-	OrderID        string
-	Strategy       string
+	Symbol     string
+	Timeframe  string
+	Side       positionSide
+	Quantity   int
+	EntryPrice float64
+	OrderID    string
+	Strategy   string
 }
 
 // Cache stores executed orders, order sequencing, and open positions.
 type Cache struct {
-	mu            sync.Mutex
-	orderCounter  uint64
-	executed      []ExecutionReport
-	positions     map[seriesKey]*position
+	mu           sync.Mutex
+	orderCounter uint64
+	executed     []ExecutionReport
+	positions    map[seriesKey]*position
 }
 
 // NewCache creates paper execution state storage.

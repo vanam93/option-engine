@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 )
 
 func TestLoadDefaults(t *testing.T) {

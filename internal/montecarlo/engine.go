@@ -18,13 +18,13 @@ import (
 
 // Engine orchestrates Monte Carlo simulations on walk-forward validation results.
 type Engine struct {
-	cfg        Config
-	bus        ports.EventBus
-	clk        clock.Clock
-	simulator  *Simulator
-	cache      *Cache
-	health     healthSnapshot
-	workerWG   sync.WaitGroup
+	cfg       Config
+	bus       ports.EventBus
+	clk       clock.Clock
+	simulator *Simulator
+	cache     *Cache
+	health    healthSnapshot
+	workerWG  sync.WaitGroup
 
 	mu           sync.Mutex
 	ctx          context.Context

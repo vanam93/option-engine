@@ -36,14 +36,14 @@ type CacheStats struct {
 
 // Cache stores incremental indicator state per symbol and timeframe.
 type Cache struct {
-	mu     sync.RWMutex
-	emaCfg []int
-	smaCfg []int
-	rsiCfg []int
-	atrCfg []int
+	mu           sync.RWMutex
+	emaCfg       []int
+	smaCfg       []int
+	rsiCfg       []int
+	atrCfg       []int
 	macdCfg      *MACDConfig
 	bollingerCfg *BollingerConfig
-	series map[seriesKey]*seriesState
+	series       map[seriesKey]*seriesState
 }
 
 // NewCache creates indicator state storage from configuration.

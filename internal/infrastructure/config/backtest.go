@@ -64,11 +64,11 @@ func BuildBacktestConfig(cfg BacktestConfig) (backtest.Config, error) {
 func (c BacktestConfig) ToProviderConfig() map[string]any {
 	speed, _ := backtest.ParseSpeed(c.Speed)
 	return map[string]any{
-		"speed":       speed,
-		"symbols":     append([]string(nil), c.Symbols...),
-		"start_time":  c.StartTime,
-		"end_time":    c.EndTime,
-		"data_path":   c.DataPath,
-		"timeframe":   c.Timeframe,
+		"speed":      speed,
+		"symbols":    append([]string(nil), c.Symbols...),
+		"start_time": c.StartTime,
+		"end_time":   c.EndTime,
+		"data_path":  c.DataPath,
+		"timeframe":  c.Timeframe,
 	}
 }

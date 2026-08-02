@@ -11,11 +11,11 @@ import (
 type WindowStatus string
 
 const (
-	WindowStatusQueued      WindowStatus = "QUEUED"
-	WindowStatusTraining    WindowStatus = "TRAINING"
-	WindowStatusValidating  WindowStatus = "VALIDATING"
-	WindowStatusCompleted   WindowStatus = "COMPLETED"
-	WindowStatusFailed      WindowStatus = "FAILED"
+	WindowStatusQueued     WindowStatus = "QUEUED"
+	WindowStatusTraining   WindowStatus = "TRAINING"
+	WindowStatusValidating WindowStatus = "VALIDATING"
+	WindowStatusCompleted  WindowStatus = "COMPLETED"
+	WindowStatusFailed     WindowStatus = "FAILED"
 )
 
 // WindowResult stores the outcome of a completed walk-forward window.
@@ -35,16 +35,16 @@ type WindowResult struct {
 
 // WalkForwardCompleted is the payload published on walkforward.completed events.
 type WalkForwardCompleted struct {
-	WalkForwardID    string                         `json:"walkforward_id"`
-	ExperimentID     string                         `json:"experiment_id"`
-	RunID            string                         `json:"run_id"`
-	TrainPeriod      Period                         `json:"train_period"`
-	ValidationPeriod Period                         `json:"validation_period"`
-	BestParameters   experiments.ParameterSet       `json:"best_parameters"`
-	TrainingScore    float64                        `json:"training_score"`
-	ValidationScore  float64                        `json:"validation_score"`
+	WalkForwardID      string                         `json:"walkforward_id"`
+	ExperimentID       string                         `json:"experiment_id"`
+	RunID              string                         `json:"run_id"`
+	TrainPeriod        Period                         `json:"train_period"`
+	ValidationPeriod   Period                         `json:"validation_period"`
+	BestParameters     experiments.ParameterSet       `json:"best_parameters"`
+	TrainingScore      float64                        `json:"training_score"`
+	ValidationScore    float64                        `json:"validation_score"`
 	PerformanceMetrics optimization.EvaluationMetrics `json:"performance_metrics"`
-	Timestamp        time.Time                      `json:"timestamp"`
+	Timestamp          time.Time                      `json:"timestamp"`
 }
 
 // AggregatedValidation holds cross-window summary metrics.

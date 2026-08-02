@@ -18,12 +18,12 @@ const intentApproved = "APPROVED"
 
 // Engine consumes ApprovedTradeIntent events and publishes ExecutionReport events.
 type Engine struct {
-	cfg       Config
-	bus       ports.EventBus
-	clk       clock.Clock
-	executor  *Executor
-	cache     *Cache
-	health    healthSnapshot
+	cfg      Config
+	bus      ports.EventBus
+	clk      clock.Clock
+	executor *Executor
+	cache    *Cache
+	health   healthSnapshot
 
 	mu           sync.Mutex
 	ctx          context.Context

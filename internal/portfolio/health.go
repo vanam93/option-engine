@@ -47,13 +47,13 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, cach
 		LastEventTime: last,
 		Message:       "portfolio and PnL engine",
 		Details: map[string]string{
-			"enabled":           boolString(cfg.Enabled),
-			"positions_count":   u64String(uint64(positionsCount)),
-			"trades_processed":  u64String(uint64(tradesProcessed)),
-			"realized_pnl":      f64String(realizedPnL),
-			"unrealized_pnl":    f64String(unrealizedPnL),
-			"events_processed":  u64String(h.processed.Load()),
-			"dropped":           u64String(dropped),
+			"enabled":          boolString(cfg.Enabled),
+			"positions_count":  u64String(uint64(positionsCount)),
+			"trades_processed": u64String(uint64(tradesProcessed)),
+			"realized_pnl":     f64String(realizedPnL),
+			"unrealized_pnl":   f64String(unrealizedPnL),
+			"events_processed": u64String(h.processed.Load()),
+			"dropped":          u64String(dropped),
 		},
 	}
 }

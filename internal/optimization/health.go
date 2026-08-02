@@ -8,10 +8,10 @@ import (
 )
 
 type healthSnapshot struct {
-	processed  atomic.Uint64
-	reports    atomic.Uint64
-	rankings   atomic.Uint64
-	lastEvent  atomic.Value // time.Time
+	processed atomic.Uint64
+	reports   atomic.Uint64
+	rankings  atomic.Uint64
+	lastEvent atomic.Value // time.Time
 }
 
 func (h *healthSnapshot) record(at time.Time, ranked bool) {
@@ -50,12 +50,12 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, cach
 		LastEventTime: last,
 		Message:       "strategy optimization engine",
 		Details: map[string]string{
-			"enabled":                boolString(cfg.Enabled),
-			"evaluations_processed":  u64String(h.processed.Load()),
-			"reports_generated":      u64String(h.reports.Load()),
-			"strategies_evaluated":   u64String(uint64(strategies)),
-			"rankings_generated":     u64String(h.rankings.Load()),
-			"dropped":                u64String(dropped),
+			"enabled":               boolString(cfg.Enabled),
+			"evaluations_processed": u64String(h.processed.Load()),
+			"reports_generated":     u64String(h.reports.Load()),
+			"strategies_evaluated":  u64String(uint64(strategies)),
+			"rankings_generated":    u64String(h.rankings.Load()),
+			"dropped":               u64String(dropped),
 		},
 	}
 }

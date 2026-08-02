@@ -3,10 +3,10 @@ package events_test
 import (
 	"testing"
 
-	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
-	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
 )
 
 func TestNewEvent(t *testing.T) {

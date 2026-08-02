@@ -3,10 +3,10 @@ package ws_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vanam-gangireddy/option-engine/internal/adapters/ws"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewHub(t *testing.T) {

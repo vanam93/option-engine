@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator"
-	domainindicator "github.com/vanam-gangireddy/option-engine/internal/domain/indicator"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	domainindicator "github.com/vanam-gangireddy/option-engine/internal/domain/indicator"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 )

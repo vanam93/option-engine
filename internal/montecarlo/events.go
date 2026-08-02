@@ -26,28 +26,28 @@ type ConfidenceInterval struct {
 
 // DistributionSummary aggregates return and drawdown statistics.
 type DistributionSummary struct {
-	MeanReturn       float64 `json:"mean_return"`
-	MedianReturn     float64 `json:"median_return"`
-	StdDevReturn     float64 `json:"std_dev_return"`
-	WorstDrawdown    float64 `json:"worst_drawdown"`
-	BestDrawdown     float64 `json:"best_drawdown"`
-	MeanMaxDrawdown  float64 `json:"mean_max_drawdown"`
-	MedianMaxDrawdown float64 `json:"median_max_drawdown"`
-	ReturnHistogram  []float64 `json:"return_histogram,omitempty"`
+	MeanReturn        float64   `json:"mean_return"`
+	MedianReturn      float64   `json:"median_return"`
+	StdDevReturn      float64   `json:"std_dev_return"`
+	WorstDrawdown     float64   `json:"worst_drawdown"`
+	BestDrawdown      float64   `json:"best_drawdown"`
+	MeanMaxDrawdown   float64   `json:"mean_max_drawdown"`
+	MedianMaxDrawdown float64   `json:"median_max_drawdown"`
+	ReturnHistogram   []float64 `json:"return_histogram,omitempty"`
 }
 
 // SimulationResult stores the outcome of a completed Monte Carlo batch.
 type SimulationResult struct {
-	SimulationID       string
-	WalkForwardID      string
-	ExperimentID       string
-	Simulations        int
-	ConfidenceInterval ConfidenceInterval
+	SimulationID        string
+	WalkForwardID       string
+	ExperimentID        string
+	Simulations         int
+	ConfidenceInterval  ConfidenceInterval
 	ProbabilityOfProfit float64
-	ProbabilityOfLoss  float64
-	RiskOfRuin         float64
+	ProbabilityOfLoss   float64
+	RiskOfRuin          float64
 	DistributionSummary DistributionSummary
-	CompletedAt        time.Time
+	CompletedAt         time.Time
 }
 
 // MonteCarloCompleted is the payload published on montecarlo.completed events.

@@ -46,14 +46,14 @@ type RunResult struct {
 
 // ExperimentCompleted is the payload published on experiment.completed events.
 type ExperimentCompleted struct {
-	ExperimentID      string                        `json:"experiment_id"`
-	RunID             string                        `json:"run_id"`
-	Strategy          string                        `json:"strategy"`
-	Parameters        ParameterSet                  `json:"parameters"`
-	OptimizationScore float64                       `json:"optimization_score"`
-	Rank              int                           `json:"rank"`
+	ExperimentID      string                         `json:"experiment_id"`
+	RunID             string                         `json:"run_id"`
+	Strategy          string                         `json:"strategy"`
+	Parameters        ParameterSet                   `json:"parameters"`
+	OptimizationScore float64                        `json:"optimization_score"`
+	Rank              int                            `json:"rank"`
 	Metrics           optimization.EvaluationMetrics `json:"metrics"`
-	Timestamp         time.Time                     `json:"timestamp"`
+	Timestamp         time.Time                      `json:"timestamp"`
 }
 
 // StateSnapshot is an immutable read model of experiment state.

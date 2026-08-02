@@ -50,15 +50,15 @@ func TestProfitableStrategyHighScore(t *testing.T) {
 
 	result := cache.Apply(optimization.InputUpdate{
 		Strategy:      "trend_following",
-		Symbol:          "NIFTY",
-		Timeframe:       "5m",
-		TotalTrades:     10,
-		WinRate:         0.80,
-		RealizedPnL:     500,
-		UnrealizedPnL:   50,
-		Drawdown:        20,
-		ProfitFactor:    3.5,
-		Timestamp:       at,
+		Symbol:        "NIFTY",
+		Timeframe:     "5m",
+		TotalTrades:   10,
+		WinRate:       0.80,
+		RealizedPnL:   500,
+		UnrealizedPnL: 50,
+		Drawdown:      20,
+		ProfitFactor:  3.5,
+		Timestamp:     at,
 	}, baseCfg().Scoring)
 
 	require.Greater(t, result.Record.Score, 0.5)
@@ -71,29 +71,29 @@ func TestHighDrawdownLowerScore(t *testing.T) {
 
 	profitable := optimization.NewCache()
 	profitableResult := profitable.Apply(optimization.InputUpdate{
-		Strategy:    "profitable",
-		Symbol:      "NIFTY",
-		Timeframe:   "5m",
-		TotalTrades: 10,
-		WinRate:     0.70,
-		RealizedPnL: 300,
-		Drawdown:    30,
+		Strategy:     "profitable",
+		Symbol:       "NIFTY",
+		Timeframe:    "5m",
+		TotalTrades:  10,
+		WinRate:      0.70,
+		RealizedPnL:  300,
+		Drawdown:     30,
 		ProfitFactor: 2.5,
-		Timestamp:   at,
+		Timestamp:    at,
 	}, cfg.Scoring)
 
 	highDD := optimization.NewCache()
 	highDDResult := highDD.Apply(optimization.InputUpdate{
-		Strategy:    "high_drawdown",
-		Symbol:      "NIFTY",
-		Timeframe:   "5m",
-		TotalTrades: 10,
-		WinRate:     0.70,
-		RealizedPnL: 300,
-		Drawdown:    800,
-		MaxDrawdown: 800,
+		Strategy:     "high_drawdown",
+		Symbol:       "NIFTY",
+		Timeframe:    "5m",
+		TotalTrades:  10,
+		WinRate:      0.70,
+		RealizedPnL:  300,
+		Drawdown:     800,
+		MaxDrawdown:  800,
 		ProfitFactor: 2.5,
-		Timestamp:   at,
+		Timestamp:    at,
 	}, cfg.Scoring)
 
 	require.Greater(t, profitableResult.Record.Score, highDDResult.Record.Score)
