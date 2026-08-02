@@ -28,6 +28,8 @@ type Config struct {
 	Execution    ExecutionConfig    `mapstructure:"execution"`
 	Portfolio    PortfolioConfig    `mapstructure:"portfolio"`
 	Backtest     BacktestConfig     `mapstructure:"backtest"`
+	Optimization OptimizationConfig `mapstructure:"optimization"`
+	Experiments  ExperimentsConfig  `mapstructure:"experiments"`
 }
 
 type HTTPConfig struct {
@@ -378,6 +380,24 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("backtest.speed", "1x")
 	v.SetDefault("backtest.symbols", []string{"NIFTY"})
 	v.SetDefault("backtest.timeframe", "1m")
+
+	v.SetDefault("optimization.enabled", true)
+	v.SetDefault("optimization.subscriber_buffer", 256)
+	v.SetDefault("optimization.scoring.profit_factor_weight", 0.40)
+	v.SetDefault("optimization.scoring.win_rate_weight", 0.30)
+	v.SetDefault("optimization.scoring.expectancy_weight", 0.20)
+	v.SetDefault("optimization.scoring.drawdown_penalty", 0.10)
+
+	v.SetDefault("experiments.enabled", true)
+	v.SetDefault("experiments.parallel_workers", 4)
+	v.SetDefault("experiments.max_concurrent_runs", 4)
+	v.SetDefault("experiments.subscriber_buffer", 256)
+	v.SetDefault("experiments.symbols", []string{"NIFTY"})
+	v.SetDefault("experiments.timeframes", []string{"5m"})
+	v.SetDefault("experiments.strategy", "trend_following")
+	v.SetDefault("experiments.parameter_ranges.ema_fast", []int{5, 9, 12})
+	v.SetDefault("experiments.parameter_ranges.ema_slow", []int{21, 34, 50})
+	v.SetDefault("experiments.parameter_ranges.rsi_period", []int{14, 21})
 }
 
 // HTTPAddr returns the bind address for the HTTP server.

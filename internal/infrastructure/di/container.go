@@ -21,6 +21,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/core/metrics"
 	"github.com/vanam-gangireddy/option-engine/internal/execution/paper"
+	"github.com/vanam-gangireddy/option-engine/internal/experiments"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/postgres"
@@ -32,6 +33,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/market/snapshot"
 	"github.com/vanam-gangireddy/option-engine/internal/market/subscription"
 	"github.com/vanam-gangireddy/option-engine/internal/market/validator"
+	"github.com/vanam-gangireddy/option-engine/internal/optimization"
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
 )
@@ -61,6 +63,8 @@ type Container struct {
 	PaperEngine         *paper.Engine
 	PortfolioEngine     *portfolio.Engine
 	PerformanceEngine   *performance.Engine
+	OptimizationEngine  *optimization.Engine
+	ExperimentEngine    *experiments.Engine
 	BacktestEngine      *backtest.Engine
 	Postgres            *postgres.Pool
 	HTTPServer       *http.Server
@@ -237,6 +241,28 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("performance engine: %w", err)
 	}
 
+	optimizationCfg, err := config.BuildOptimizationEngineConfig(cfg.OptimizationEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("optimization config: %w", err)
+	}
+	optimizationEngine, err := optimization.New(optimizationCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("optimization engine: %w", err)
+	}
+
+	experimentsCfg, err := config.BuildExperimentsEngineConfig(cfg.ExperimentsEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("experiments config: %w", err)
+	}
+	var experimentRunner experiments.BacktestRunner
+	if backtestEngine != nil {
+		experimentRunner = experiments.NewSharedEngineRunner(backtestEngine)
+	}
+	experimentEngine, err := experiments.New(experimentsCfg, bus, clk, experimentRunner)
+	if err != nil {
+		return nil, fmt.Errorf("experiment engine: %w", err)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -257,6 +283,8 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, paperEngine)
 	healthReporters = append(healthReporters, portfolioEngine)
 	healthReporters = append(healthReporters, performanceEngine)
+	healthReporters = append(healthReporters, optimizationEngine)
+	healthReporters = append(healthReporters, experimentEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -291,6 +319,8 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		PaperEngine:         paperEngine,
 		PortfolioEngine:     portfolioEngine,
 		PerformanceEngine:   performanceEngine,
+		OptimizationEngine:  optimizationEngine,
+		ExperimentEngine:    experimentEngine,
 		BacktestEngine:      backtestEngine,
 		Postgres:            pool,
 		HTTPServer:       httpServer,
@@ -321,6 +351,16 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
 				return err
 			}
+		}
+	}
+	if c.ExperimentEngine != nil {
+		if err := c.ExperimentEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.OptimizationEngine != nil {
+		if err := c.OptimizationEngine.Start(ctx); err != nil {
+			return err
 		}
 	}
 	if c.PerformanceEngine != nil {
@@ -395,6 +435,12 @@ func (c *Container) Close() {
 	}
 	if c.PerformanceEngine != nil {
 		_ = c.PerformanceEngine.Close()
+	}
+	if c.OptimizationEngine != nil {
+		_ = c.OptimizationEngine.Close()
+	}
+	if c.ExperimentEngine != nil {
+		_ = c.ExperimentEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()

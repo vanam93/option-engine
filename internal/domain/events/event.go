@@ -22,6 +22,8 @@ const (
 	ExecutionReport          Type = "execution.report"
 	PortfolioUpdated         Type = "portfolio.updated"
 	PerformanceUpdated       Type = "performance.updated"
+	OptimizationUpdated      Type = "optimization.updated"
+	ExperimentCompleted      Type = "experiment.completed"
 	ContextEvaluated         Type = "context.evaluated"
 	StrategySignalGenerated  Type = "strategy.signal.generated"
 	DecisionMade             Type = "decision.made"

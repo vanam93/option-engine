@@ -1,4 +1,4 @@
-package performance
+package optimization
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 )
 
-// Engine consumes portfolio.updated events and publishes performance.updated events.
+// Engine consumes performance.updated events and publishes optimization.updated events.
 type Engine struct {
 	cfg    Config
 	bus    ports.EventBus
@@ -30,7 +30,7 @@ type Engine struct {
 	wg           sync.WaitGroup
 }
 
-// New creates a performance analytics engine subscribed to portfolio.updated events only.
+// New creates an optimization engine subscribed to performance.updated events only.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
 	cfg = cfg.withDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -50,7 +50,7 @@ func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
 	}, nil
 }
 
-// Start subscribes to portfolio.updated before the consumer goroutine starts.
+// Start subscribes to performance.updated before the consumer goroutine starts.
 func (e *Engine) Start(ctx context.Context) error {
 	if !e.cfg.Enabled {
 		return nil
@@ -68,7 +68,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.ctx = engineCtx
 	e.cancel = cancel
 	e.subscription = e.bus.Subscribe(e.cfg.SubscriberBuffer, func(evt events.Event) bool {
-		return evt.Type == events.PortfolioUpdated
+		return evt.Type == events.PerformanceUpdated
 	})
 	e.started = true
 	e.mu.Unlock()
@@ -113,70 +113,78 @@ func (e *Engine) handle(evt events.Event) {
 	if !ok {
 		return
 	}
-	result := e.cache.Apply(update)
-	e.publish(result.Updated)
-	e.health.record(result.Updated.Timestamp)
+	result := e.cache.Apply(update, e.cfg.Scoring)
+	e.publish(result.Record)
+	e.health.record(result.Record.UpdatedAt, len(result.Ranking) > 0)
 }
 
 func parseInputUpdate(payload json.RawMessage) (InputUpdate, bool) {
 	var raw struct {
+		Strategy      string    `json:"strategy"`
 		Symbol        string    `json:"symbol"`
-		Position      *struct{} `json:"position"`
+		Timeframe     string    `json:"timeframe"`
+		Parameters    string    `json:"parameters"`
+		TotalTrades   int       `json:"total_trades"`
+		WinRate       float64   `json:"win_rate"`
 		RealizedPnL   float64   `json:"realized_pnl"`
 		UnrealizedPnL float64   `json:"unrealized_pnl"`
+		Drawdown      float64   `json:"drawdown"`
+		ProfitFactor  float64   `json:"profit_factor"`
+		MaxDrawdown   float64   `json:"max_drawdown"`
 		Timestamp     time.Time `json:"timestamp"`
-		Strategy      string    `json:"strategy"`
-		Timeframe     string    `json:"timeframe"`
-		ParameterSet  string    `json:"parameter_set"`
-		Parameters    string    `json:"parameters"`
-		BacktestID    string    `json:"backtest_id"`
-		ExperimentID  string    `json:"experiment_id"`
-		RunID         string    `json:"run_id"`
 	}
 	if err := json.Unmarshal(payload, &raw); err != nil {
 		return InputUpdate{}, false
 	}
-	if raw.Symbol == "" {
-		return InputUpdate{}, false
+
+	strategy := raw.Strategy
+	if strategy == "" {
+		strategy = "default"
 	}
+	symbol := raw.Symbol
+	if symbol == "" {
+		symbol = "portfolio"
+	}
+	timeframe := raw.Timeframe
+	if timeframe == "" {
+		timeframe = "1m"
+	}
+
 	return InputUpdate{
-		Symbol:        raw.Symbol,
-		PositionOpen:  raw.Position != nil,
+		Strategy:      strategy,
+		Symbol:        symbol,
+		Timeframe:     timeframe,
+		Parameters:    raw.Parameters,
+		TotalTrades:   raw.TotalTrades,
+		WinRate:       raw.WinRate,
 		RealizedPnL:   raw.RealizedPnL,
 		UnrealizedPnL: raw.UnrealizedPnL,
+		Drawdown:      raw.Drawdown,
+		ProfitFactor:  raw.ProfitFactor,
+		MaxDrawdown:   raw.MaxDrawdown,
 		Timestamp:     raw.Timestamp,
-		Context: ExperimentContext{
-			Strategy:     raw.Strategy,
-			Symbol:       raw.Symbol,
-			Timeframe:    raw.Timeframe,
-			ParameterSet: raw.ParameterSet,
-			Parameters:   firstNonEmpty(raw.Parameters, raw.ParameterSet),
-			BacktestID:   raw.BacktestID,
-			ExperimentID: raw.ExperimentID,
-			RunID:        raw.RunID,
-		},
 	}, true
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func (e *Engine) publish(update PerformanceUpdated) {
-	out, err := events.NewEventWithClock(e.clk, events.PerformanceUpdated, engineName, update)
+func (e *Engine) publish(record EvaluationRecord) {
+	out, err := events.NewEventWithClock(e.clk, events.OptimizationUpdated, engineName, OptimizationUpdated{
+		Strategy:   record.Key.Strategy,
+		Symbol:     record.Key.Symbol,
+		Timeframe:  record.Key.Timeframe,
+		Parameters: record.Key.Parameters,
+		Metrics:    record.Metrics,
+		Score:      record.Score,
+		Rank:       record.Rank,
+		Timestamp:  record.UpdatedAt,
+	})
 	if err != nil {
 		return
 	}
 	e.bus.Publish(out)
 }
 
-// State returns an immutable snapshot of current performance metrics.
-func (e *Engine) State() PerformanceSnapshot {
+// State returns an immutable snapshot of current optimization state.
+func (e *Engine) State() StateSnapshot {
 	return e.cache.Snapshot()
 }
 

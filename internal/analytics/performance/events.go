@@ -2,6 +2,18 @@ package performance
 
 import "time"
 
+// ExperimentContext carries optional research metadata forwarded through performance events.
+type ExperimentContext struct {
+	Strategy     string `json:"strategy,omitempty"`
+	Symbol       string `json:"symbol,omitempty"`
+	Timeframe    string `json:"timeframe,omitempty"`
+	ParameterSet string `json:"parameter_set,omitempty"`
+	Parameters   string `json:"parameters,omitempty"`
+	BacktestID   string `json:"backtest_id,omitempty"`
+	ExperimentID string `json:"experiment_id,omitempty"`
+	RunID        string `json:"run_id,omitempty"`
+}
+
 // InputUpdate mirrors the portfolio.updated payload consumed by the performance engine.
 type InputUpdate struct {
 	Symbol        string
@@ -9,6 +21,7 @@ type InputUpdate struct {
 	RealizedPnL   float64
 	UnrealizedPnL float64
 	Timestamp     time.Time
+	Context       ExperimentContext
 }
 
 // TradeResult records a completed round-trip trade.
@@ -32,6 +45,7 @@ type PerformanceUpdated struct {
 	UnrealizedPnL float64   `json:"unrealized_pnl"`
 	Drawdown      float64   `json:"drawdown"`
 	Timestamp     time.Time `json:"timestamp"`
+	ExperimentContext
 }
 
 // PerformanceSnapshot is an immutable snapshot of all performance metrics.

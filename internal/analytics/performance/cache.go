@@ -18,6 +18,7 @@ type Cache struct {
 	equityCurve     []EquityPoint
 	openSymbols     map[string]bool
 	lastRealizedPnL float64
+	context         ExperimentContext
 
 	totalTrades   int
 	winningTrades int
@@ -58,6 +59,7 @@ func (c *Cache) Apply(update InputUpdate) applyResult {
 	c.lastRealizedPnL = update.RealizedPnL
 	c.realizedPnL = update.RealizedPnL
 	c.unrealizedPnL = update.UnrealizedPnL
+	c.context = mergeContext(c.context, update.Context)
 
 	net := NetPnL(c.realizedPnL, c.unrealizedPnL)
 	c.equityCurve = append(c.equityCurve, EquityPoint{
@@ -69,7 +71,7 @@ func (c *Cache) Apply(update InputUpdate) applyResult {
 	snapshot := c.buildSnapshot(update.Timestamp)
 	return applyResult{
 		Snapshot: snapshot,
-		Updated:  snapshotToEvent(snapshot),
+		Updated:  snapshotToEventWithContext(snapshot, c.context),
 	}
 }
 
@@ -118,7 +120,7 @@ func (c *Cache) buildSnapshot(at time.Time) PerformanceSnapshot {
 }
 
 func snapshotToEvent(snapshot PerformanceSnapshot) PerformanceUpdated {
-	return PerformanceUpdated{
+	updated := PerformanceUpdated{
 		TotalTrades:   snapshot.TotalTrades,
 		WinRate:       snapshot.WinRate,
 		RealizedPnL:   snapshot.RealizedPnL,
@@ -126,6 +128,46 @@ func snapshotToEvent(snapshot PerformanceSnapshot) PerformanceUpdated {
 		Drawdown:      snapshot.CurrentDrawdown,
 		Timestamp:     snapshot.EquityCurve[len(snapshot.EquityCurve)-1].Timestamp,
 	}
+	return updated
+}
+
+func snapshotToEventWithContext(snapshot PerformanceSnapshot, ctx ExperimentContext) PerformanceUpdated {
+	out := snapshotToEvent(snapshot)
+	out.ExperimentContext = ctx
+	if ctx.ParameterSet != "" && ctx.Parameters == "" {
+		out.Parameters = ctx.ParameterSet
+	}
+	return out
+}
+
+func mergeContext(current, update ExperimentContext) ExperimentContext {
+	out := current
+	if update.Strategy != "" {
+		out.Strategy = update.Strategy
+	}
+	if update.Symbol != "" {
+		out.Symbol = update.Symbol
+	}
+	if update.Timeframe != "" {
+		out.Timeframe = update.Timeframe
+	}
+	if update.ParameterSet != "" {
+		out.ParameterSet = update.ParameterSet
+		out.Parameters = update.ParameterSet
+	}
+	if update.Parameters != "" {
+		out.Parameters = update.Parameters
+	}
+	if update.BacktestID != "" {
+		out.BacktestID = update.BacktestID
+	}
+	if update.ExperimentID != "" {
+		out.ExperimentID = update.ExperimentID
+	}
+	if update.RunID != "" {
+		out.RunID = update.RunID
+	}
+	return out
 }
 
 // Snapshot returns an immutable copy of the current performance state.
