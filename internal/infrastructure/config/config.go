@@ -111,7 +111,21 @@ type SymbolsConfig struct {
 
 // AnalyticsConfig groups Stage 3 analytics engine settings.
 type AnalyticsConfig struct {
-	Candle CandleAnalyticsConfig `mapstructure:"candle"`
+	Candle    CandleAnalyticsConfig    `mapstructure:"candle"`
+	Indicator IndicatorAnalyticsConfig `mapstructure:"indicator"`
+}
+
+// IndicatorAnalyticsConfig controls the indicator computation engine.
+type IndicatorAnalyticsConfig struct {
+	Enabled          bool                   `mapstructure:"enabled"`
+	SubscriberBuffer int                    `mapstructure:"subscriber_buffer"`
+	EMA              []IndicatorPeriodConfig `mapstructure:"ema"`
+	SMA              []IndicatorPeriodConfig `mapstructure:"sma"`
+}
+
+// IndicatorPeriodConfig is a lookback period for an indicator.
+type IndicatorPeriodConfig struct {
+	Period int `mapstructure:"period"`
 }
 
 // CandleAnalyticsConfig controls the candle aggregation engine.
@@ -193,6 +207,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.candle.volume_mode", "cumulative")
 	v.SetDefault("analytics.candle.order_policy", "reject_older")
 	v.SetDefault("analytics.candle.idle_evict_after", "0s")
+
+	v.SetDefault("analytics.indicator.enabled", true)
+	v.SetDefault("analytics.indicator.subscriber_buffer", 256)
+	v.SetDefault("analytics.indicator.ema", []map[string]any{{"period": 9}})
+	v.SetDefault("analytics.indicator.sma", []map[string]any{{"period": 20}})
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -246,6 +265,24 @@ func (c *Config) CandleEngineConfig() (CandleEngineConfig, error) {
 		IdleEvictAfter:   idleEvict,
 		Timeframes:       append([]string(nil), cfg.Timeframes...),
 	}, nil
+}
+
+// IndicatorEngineConfig is the validated indicator configuration used by DI wiring.
+type IndicatorEngineConfig struct {
+	Enabled          bool
+	SubscriberBuffer int
+	EMA              []IndicatorPeriodConfig
+	SMA              []IndicatorPeriodConfig
+}
+
+// IndicatorEngineSettings maps analytics indicator settings.
+func (c *Config) IndicatorEngineSettings() IndicatorEngineConfig {
+	return IndicatorEngineConfig{
+		Enabled:          c.Analytics.Indicator.Enabled,
+		SubscriberBuffer: c.Analytics.Indicator.SubscriberBuffer,
+		EMA:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.EMA...),
+		SMA:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.SMA...),
+	}
 }
 
 // CandleEngineConfig is the validated candle configuration used by DI wiring.

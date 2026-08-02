@@ -9,7 +9,7 @@ EventBus (Stage 2, frozen)
     ↓  MarketDataReceived
 Candle Engine          ← Phase 1 (implemented)
     ↓  CandleClosed
-Indicator Engine       ← Phase 2 (planned)
+Indicator Engine       ← Phase 2A (implemented)
     ↓  IndicatorUpdated
 Signal Engine          ← Phase 3 (planned)
     ↓  StrategySignalGenerated
@@ -74,7 +74,15 @@ See `internal/analytics/candle/VOLUME_CONTRACT.md`. Default mode is `cumulative`
 - Analytics engines may **publish** new event types but must not mutate Stage 2 cache or subscription state.
 - All time bucketing uses the injected `clock.Clock` and configured timezone.
 
+## Phase 2A — Indicator Engine (foundation)
+
+- Subscribes only to `CandleClosed` events.
+- Incremental EMA and SMA per `(symbol, timeframe)`.
+- Publishes `IndicatorUpdated` with `domain/indicator.IndicatorValue` payload.
+- Warm-up: no publish until lookback period is satisfied.
+- Startup order: Indicator → Candle → Gateway. Shutdown: Gateway → Candle → Indicator.
+
 ## Next phases
 
-- **Phase 2**: Indicator engine consuming `CandleClosed`.
+- **Phase 2B**: Additional indicators (RSI, MACD, ATR, etc.)
 - **Phase 3**: Signal engine consuming `IndicatorUpdated`.

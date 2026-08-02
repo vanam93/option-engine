@@ -84,3 +84,11 @@ analytics:
     volume_mode: cumulative
     order_policy: reject_older
     idle_evict_after: 0s
+
+  indicator:
+    enabled: true
+    subscriber_buffer: 256
+    ema:
+      - period: 9
+    sma:
+      - period: 20
