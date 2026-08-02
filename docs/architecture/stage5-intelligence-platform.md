@@ -1419,6 +1419,615 @@ sequenceDiagram
 | 1 | Market Scanner Engine | ✅ Complete |
 | 2 | Confidence & Opportunity Ranking | ✅ Complete |
 | 3 | Recommendation Engine | ✅ Complete |
-| 4 | Alert Engine | Planned |
-| 5 | Scanner Persistence | Planned |
-| 6 | Query Layer | Planned |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Alert Engine | Planned |
+| 6 | Scanner Persistence | Planned |
+| 7 | Query Layer | Planned |
+
+---
+
+## Phase 4 — Recommendation Validation Engine
+
+Phase 4 introduces the **Recommendation Validation Engine** (`internal/validation`). The engine consumes **only** `recommendation.updated` events and validates recommendations against configurable research-quality thresholds before they become final validated recommendations. It does **not** execute trades.
+
+### Pipeline
+
+```text
+recommendation.updated
+    ↓
+Recommendation Validation Engine
+    ↓
+validated.recommendation
+```
+
+### Goals
+
+| Goal | Detail |
+|------|--------|
+| Quality gating | Reject recommendations that fail research-quality thresholds |
+| Freshness enforcement | Discard stale recommendations beyond configured age |
+| Duplicate suppression | Avoid republishing identical consecutive recommendations |
+| Latest per symbol | Maintain most recent validation per `(symbol, timeframe)` |
+| Single input contract | Consume only `recommendation.updated`; no upstream engine imports |
+| No execution | Intelligence output only; never routes orders |
+
+### Package layout
+
+```text
+internal/validation/
+├── engine.go       # Lifecycle, subscription, publish
+├── config.go       # Thresholds and subscriber buffer
+├── validator.go    # Threshold checks and duplicate detection
+├── cache.go        # Latest validation per symbol/timeframe
+├── events.go       # ValidatedRecommendation payload types
+├── health.go       # Health reporter
+├── errors.go       # Structured errors
+├── validator_test.go # Threshold validation tests
+└── engine_test.go  # Publish and duplicate suppression tests
+```
+
+Configuration wiring: `internal/infrastructure/config/validation_engine.go`
+
+### Validation checks
+
+| Check | Default threshold | Source |
+|-------|-------------------|--------|
+| Minimum confidence | `0.70` | `confidence` field |
+| Minimum optimization score | `0.60` | `optimization_score` or parsed summary |
+| Minimum walk-forward score | `0.60` | `walkforward_score` or parsed summary |
+| Minimum Monte Carlo robustness | `0.60` | `monte_carlo_score` or parsed summary |
+| Minimum win rate | `0.50` | `win_rate` when provided |
+| Maximum drawdown | `0.20` | `drawdown` when provided |
+| Freshness | `300s` | `generated_at` age |
+| Duplicate suppression | enabled | Same recommendation + confidence as previous |
+
+### Validation result
+
+| Status | Meaning |
+|--------|---------|
+| `VALID` | All applicable checks passed |
+| `REJECTED` | One or more checks failed |
+
+### Event contract: `validated.recommendation`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `symbol` | string | Instrument symbol |
+| `timeframe` | string | Bar timeframe |
+| `recommendation` | string | `STRONG_BUY`, `BUY`, `WATCH`, or `AVOID` |
+| `confidence` | float64 | Recommendation confidence (0–1) |
+| `validation_status` | string | `VALID` or `REJECTED` |
+| `rejection_reasons` | []string | Human-readable failure reasons (empty when valid) |
+| `validated_at` | time | Validation timestamp |
+
+### Configuration
+
+```yaml
+intelligence:
+  validation:
+    enabled: true
+    min_confidence: 0.70
+    min_optimization_score: 0.60
+    min_walkforward_score: 0.60
+    min_montecarlo_score: 0.60
+    min_win_rate: 0.50
+    max_drawdown: 0.20
+    freshness_seconds: 300
+    suppress_duplicates: true
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable validation engine |
+| `subscriber_buffer` | `256` | Event bus subscriber buffer |
+| `min_confidence` | `0.70` | Minimum recommendation confidence |
+| `min_optimization_score` | `0.60` | Minimum optimization score |
+| `min_walkforward_score` | `0.60` | Minimum walk-forward validation score |
+| `min_montecarlo_score` | `0.60` | Minimum Monte Carlo robustness score |
+| `min_win_rate` | `0.50` | Minimum win rate when provided |
+| `max_drawdown` | `0.20` | Maximum drawdown when provided |
+| `freshness_seconds` | `300` | Maximum recommendation age in seconds |
+| `suppress_duplicates` | `true` | Suppress identical consecutive recommendations |
+
+### Engine lifecycle
+
+#### Startup order
+
+Validation Engine subscribes **before** Recommendation Engine publishes:
+
+```text
+Validation → Recommendation → Opportunity → Scanner → Research → … → Gateway
+```
+
+#### Shutdown order (reverse)
+
+```text
+Gateway → … → Scanner → Opportunity → Recommendation → Validation → Research
+```
+
+#### Lifecycle steps
+
+1. `New(cfg, bus, clk)` — validate config, allocate cache and validator.
+2. `Start(ctx)` — subscribe to `recommendation.updated` only, launch consumer goroutine.
+3. Consumer loop — parse recommendation, validate thresholds, cache, publish.
+4. `Close()` — cancel context, drain subscription, wait on WaitGroup, close subscription.
+
+### Component diagram
+
+```mermaid
+flowchart LR
+    subgraph validation_pkg["internal/validation"]
+        ENG[Engine]
+        CFG[Config]
+        VAL[Validator]
+        CACHE[Cache]
+        EVT[Events]
+        HLTH[Health]
+    end
+
+    ENG --> CFG
+    ENG --> VAL
+    ENG --> CACHE
+    ENG --> EVT
+    ENG --> HLTH
+    VAL --> CFG
+```
+
+### Event flow
+
+```mermaid
+sequenceDiagram
+    participant REC as Recommendation Engine
+    participant BUS as EventBus
+    participant VAL as Validation Engine
+    participant CACHE as Cache
+
+    REC->>BUS: recommendation.updated
+    BUS->>VAL: recommendation.updated
+    VAL->>VAL: Validate thresholds
+    VAL->>CACHE: Put latest (symbol, timeframe)
+    VAL->>BUS: validated.recommendation
+```
+
+### Health monitoring
+
+`GET /health/components` includes `validation_engine`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether engine is configured on |
+| `validated` | Recommendations that passed all checks |
+| `rejected` | Recommendations that failed one or more checks |
+| `duplicate_suppressed` | Identical consecutive recommendations suppressed |
+| `expired` | Recommendations rejected for staleness |
+| `average_validation_score` | Mean composite validation score |
+| `dropped` | Subscription dropped event count |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Cache | `sync.RWMutex` on validation map |
+| Engine lifecycle | `sync.Mutex` on started/closed flags |
+| Health counters | Updated on each processed recommendation |
+| Event processing | Single consumer goroutine |
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Malformed `recommendation.updated` payload | Skip silently; no publish |
+| Missing optional research metrics | Skip checks for unavailable metrics |
+| Bus publish error | Skip; cache still updated |
+| Shutdown mid-event | Drain subscription before exit |
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Valid recommendation | All thresholds pass produces `VALID` |
+| Rejected low confidence | Below-threshold confidence produces `REJECTED` |
+| Rejected high drawdown | Excessive drawdown produces `REJECTED` |
+| Duplicate suppression | Identical consecutive events not republished |
+| Event publish | `recommendation.updated` triggers `validated.recommendation` |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Consume only `recommendation.updated` | Clean single-input contract; validation is downstream of recommendation |
+| Optional metric fields | Append-only JSON fields; summary parsing fallback for optimization/walk-forward/Monte Carlo |
+| Skip unavailable metrics | Win rate and drawdown checked only when explicitly provided |
+| Duplicate suppression configurable | Reduces bus noise for unchanged recommendations |
+| Publish rejected results | Downstream consumers can audit rejection reasons |
+| No trade execution | Aligns with intelligence-platform scope |
+
+### Phase 4 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Alert Engine | Planned |
+| 6 | Scanner Persistence | Planned |
+| 7 | Query Layer | Planned |
+
+---
+
+## Phase 5 — Recommendation State Manager
+
+Phase 5 introduces the **Recommendation State Manager** (`internal/recommendationstate`). Internal engine events (`recommendation.updated`, `validated.recommendation`) are implementation details. This engine exposes a **single, persistent recommendation lifecycle** that evolves over time with a stable `RecommendationID`. Future Alert Engine, Dashboard APIs, Email, Mobile Apps, and WebSocket streaming consume `recommendation.state.updated` instead of raw engine events.
+
+### Purpose
+
+| Goal | Detail |
+|------|--------|
+| Stable identity | Every recommendation receives a globally unique `RecommendationID` (e.g. `REC-20260802-NIFTY-000001`) |
+| Lifecycle management | Track states: `CREATED`, `ACTIVE`, `WATCH`, `EXIT_RECOMMENDED`, `CLOSED` |
+| Single source of truth | One active recommendation per `(symbol, timeframe, strategy)` |
+| Timeline history | Chronological audit trail of confidence and status changes |
+| Duplicate merge | Repeated validated recommendations update existing state — never create duplicates |
+| Downstream contract | Publish only `recommendation.state.updated` for all consumer surfaces |
+
+### Pipeline
+
+```text
+validated.recommendation
+    ↓
+Recommendation State Manager
+    ↓
+recommendation.state.updated
+    ↓
+Future:
+    Alert Engine
+    Dashboard APIs
+    WebSocket
+    Mobile
+    Email
+    Research reports
+```
+
+### Goals
+
+| Goal | Detail |
+|------|--------|
+| Persistent lifecycle | Recommendations evolve; consumers subscribe to state, not raw BUY/WATCH/AVOID events |
+| Globally unique IDs | `REC-{YYYYMMDD}-{SYMBOL}-{sequence}` format |
+| Composite uniqueness | One active recommendation per `(symbol, timeframe, strategy)` |
+| Timeline audit | Every change appends a chronological timeline entry |
+| Single input contract | Consume only `validated.recommendation`; no upstream engine imports |
+| No execution | Intelligence output only; never routes orders |
+
+### Package layout
+
+```text
+internal/recommendationstate/
+├── engine.go       # Lifecycle, subscription, state merge, publish
+├── config.go       # Enabled flag, max_active, subscriber buffer
+├── cache.go        # Active/closed stores, indexes, ID generation
+├── timeline.go     # Timeline entry logic and state transitions
+├── events.go       # RecommendationStateUpdated payload types
+├── health.go       # Health reporter
+├── errors.go       # Structured errors
+└── engine_test.go  # Creation, update, duplicate merge, publish tests
+```
+
+Configuration wiring: `internal/infrastructure/config/recommendation_state.go`
+
+### Architecture
+
+```mermaid
+flowchart TB
+    VAL[Validation Engine]
+    BUS[EventBus]
+    RSM[Recommendation State Manager]
+    CACHE[Cache]
+    TL[Timeline]
+    FUTURE["Future Consumers\n(Alert, API, WS, Mobile, Email)"]
+
+    VAL -->|validated.recommendation| BUS
+    BUS --> RSM
+    RSM --> CACHE
+    RSM --> TL
+    RSM -->|recommendation.state.updated| BUS
+    BUS -.-> FUTURE
+```
+
+### Component responsibilities
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Engine | `engine.go` | Subscribe to `validated.recommendation`, merge state, publish updates |
+| Cache | `cache.go` | Thread-safe active/closed stores, indexes, ID sequencing |
+| Timeline | `timeline.go` | Append chronological entries on confidence/status changes |
+| Events | `events.go` | `RecommendationStateUpdated` and internal input types |
+| Health | `health.go` | Active/closed counts, timeline entries, merge statistics |
+| Config | `config.go` | `enabled`, `max_active`, `subscriber_buffer` |
+
+### Lifecycle diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED: new VALID recommendation
+    CREATED --> ACTIVE: STRONG_BUY / BUY
+    CREATED --> WATCH: WATCH level
+    CREATED --> EXIT_RECOMMENDED: AVOID level
+    ACTIVE --> WATCH: confidence / level downgrade
+    ACTIVE --> EXIT_RECOMMENDED: AVOID validated
+    WATCH --> ACTIVE: confidence / level upgrade
+    WATCH --> EXIT_RECOMMENDED: AVOID validated
+    ACTIVE --> CLOSED: validation REJECTED
+    WATCH --> CLOSED: validation REJECTED
+    EXIT_RECOMMENDED --> CLOSED: validation REJECTED
+    CLOSED --> [*]
+```
+
+### State transitions
+
+| Input recommendation | Validation | Target status |
+|---------------------|------------|---------------|
+| `STRONG_BUY`, `BUY` | `VALID` | `ACTIVE` |
+| `WATCH` | `VALID` | `WATCH` |
+| `AVOID` | `VALID` | `EXIT_RECOMMENDED` |
+| any | `REJECTED` | `CLOSED` (existing recommendation only) |
+
+New recommendations are created only for `VALID` inputs. `REJECTED` inputs close an existing recommendation or are skipped when no prior state exists.
+
+### Recommendation identity
+
+Format: `REC-{YYYYMMDD}-{SYMBOL}-{sequence}`
+
+Example: `REC-20260802-NIFTY-000001`
+
+- Sequence is per-symbol per-day, zero-padded to 6 digits
+- ID is assigned once at creation and preserved across all updates
+- Duplicate validated recommendations merge into the existing ID
+
+### Timeline model
+
+Each timeline entry contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | time | When the change occurred |
+| `event` | string | Event type (see below) |
+| `reason` | string | Human-readable explanation |
+| `previous_value` | string | Value before change |
+| `new_value` | string | Value after change |
+
+Timeline event types:
+
+| Event | Trigger |
+|-------|---------|
+| `Recommendation Created` | New recommendation for `(symbol, timeframe, strategy)` |
+| `Confidence Increased` | Validated confidence rose |
+| `Confidence Decreased` | Validated confidence fell |
+| `Status Changed` | Lifecycle status transition |
+| `Exit Recommended` | Transition to `EXIT_RECOMMENDED` |
+| `Closed` | Validation rejected or explicit close |
+
+### Cache model
+
+Thread-safe in-memory cache with:
+
+| Store | Key | Value |
+|-------|-----|-------|
+| Active recommendations | `(symbol, timeframe, strategy)` | `RecommendationID` |
+| Closed recommendations | `(symbol, timeframe, strategy)` | `RecommendationID` |
+| By ID | `RecommendationID` | `Recommendation` + timeline |
+| By symbol | `symbol` | Set of `RecommendationID` |
+| By strategy | `strategy` | Set of `RecommendationID` |
+
+Each recommendation stores:
+
+| Field | Description |
+|-------|-------------|
+| `RecommendationID` | Stable globally unique identifier |
+| `Symbol` | Instrument symbol |
+| `Timeframe` | Bar timeframe |
+| `Strategy` | Strategy identifier (defaults to `default` when absent in payload) |
+| `CurrentStatus` | Lifecycle state |
+| `Confidence` | Latest validated confidence |
+| `CreatedAt` | First creation timestamp |
+| `UpdatedAt` | Last mutation timestamp |
+| `ClosedAt` | Close timestamp (when `CLOSED`) |
+
+`max_active` caps the number of concurrently active recommendations. When the limit is reached, new recommendations are not created; existing entries continue to receive updates.
+
+### Event contract: `recommendation.state.updated`
+
+Published on every state mutation (creation, confidence change, status change, close).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `recommendation_id` | string | yes | Stable recommendation identifier |
+| `symbol` | string | yes | Instrument symbol |
+| `timeframe` | string | yes | Bar timeframe |
+| `strategy` | string | yes | Strategy identifier |
+| `current_status` | string | yes | `CREATED`, `ACTIVE`, `WATCH`, `EXIT_RECOMMENDED`, or `CLOSED` |
+| `confidence` | float64 | yes | Latest confidence (0–1) |
+| `latest_timeline_entry` | object | yes | Most recent timeline entry |
+| `summary` | string | yes | Human-readable state summary |
+
+#### `latest_timeline_entry` object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | time | Entry timestamp |
+| `event` | string | Timeline event type |
+| `reason` | string | Explanation |
+| `previous_value` | string | Prior value |
+| `new_value` | string | New value |
+
+### Configuration
+
+```yaml
+intelligence:
+  recommendation_state:
+    enabled: true
+    max_active: 10000
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable recommendation state manager |
+| `subscriber_buffer` | `256` | Event bus subscriber buffer |
+| `max_active` | `10000` | Maximum concurrently active recommendations |
+
+### Engine lifecycle
+
+#### Startup order
+
+Recommendation State Manager subscribes **before** Validation Engine publishes:
+
+```text
+RecommendationState → Validation → Recommendation → Opportunity → Scanner → Research → … → Gateway
+```
+
+#### Shutdown order (reverse)
+
+```text
+Gateway → … → Scanner → Opportunity → Recommendation → Validation → RecommendationState → Research
+```
+
+#### Lifecycle steps
+
+1. `New(cfg, bus, clk)` — validate config, allocate cache.
+2. `Start(ctx)` — subscribe to `validated.recommendation` only, launch consumer goroutine.
+3. Consumer loop — parse validated input, merge state, append timeline, publish.
+4. `Close()` — cancel context, drain subscription, wait on WaitGroup, close subscription.
+
+### Component diagram
+
+```mermaid
+flowchart LR
+    subgraph recommendationstate_pkg["internal/recommendationstate"]
+        ENG[Engine]
+        CFG[Config]
+        CACHE[Cache]
+        TL[Timeline]
+        EVT[Events]
+        HLTH[Health]
+    end
+
+    ENG --> CFG
+    ENG --> CACHE
+    ENG --> TL
+    ENG --> EVT
+    ENG --> HLTH
+    TL --> CACHE
+```
+
+### Event flow
+
+```mermaid
+sequenceDiagram
+    participant VAL as Validation Engine
+    participant BUS as EventBus
+    participant RSM as Recommendation State Manager
+    participant CACHE as Cache
+
+    VAL->>BUS: validated.recommendation
+    BUS->>RSM: validated.recommendation
+    RSM->>CACHE: Lookup (symbol, timeframe, strategy)
+    alt New recommendation
+        RSM->>CACHE: Assign RecommendationID, store active
+        RSM->>RSM: Append "Recommendation Created"
+    else Existing recommendation
+        RSM->>CACHE: Update confidence/status
+        RSM->>RSM: Append timeline entry
+    end
+    RSM->>BUS: recommendation.state.updated
+```
+
+### Health monitoring
+
+`GET /health/components` includes `recommendation_state_engine`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether engine is configured on |
+| `active_recommendations` | Count of active lifecycle entries |
+| `closed_recommendations` | Count of closed lifecycle entries |
+| `timeline_entries` | Total timeline entries across all recommendations |
+| `updates_processed` | Total validated recommendations processed |
+| `duplicates_merged` | Updates merged into existing recommendations |
+| `average_confidence` | Mean confidence across all stored recommendations |
+| `dropped` | Subscription dropped event count |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Cache | `sync.RWMutex` on all maps and indexes |
+| Engine lifecycle | `sync.Mutex` on started/closed flags |
+| Health counters | Updated on each processed update |
+| Event processing | Single consumer goroutine |
+| ID sequencing | Protected under cache write lock |
+
+Rules:
+
+- No lock held during bus publish
+- `Health()` safe for concurrent HTTP probe goroutines
+- Cache returns copies of timeline slices via `GetByID`
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Malformed `validated.recommendation` payload | Skip silently; no publish |
+| `REJECTED` with no existing recommendation | Skip; no state created |
+| Active limit reached | Skip new creation; existing updates still processed |
+| Bus publish error | Skip; cache still updated |
+| Shutdown mid-event | Drain subscription before exit |
+
+### Future integration
+
+| Consumer | Integration |
+|----------|-------------|
+| Alert Engine | Subscribe to `recommendation.state.updated`; fire alerts on status transitions |
+| Dashboard APIs | Expose active/closed recommendations and timelines via query layer |
+| WebSocket | Fan out `recommendation.state.updated` to connected clients |
+| Mobile | Push notifications on `ACTIVE` and `EXIT_RECOMMENDED` transitions |
+| Email | Daily digest of closed recommendations with timeline summaries |
+| Research reports | Correlate recommendation lifecycle with backtest and optimization outcomes |
+
+All future consumers subscribe to `recommendation.state.updated` only. They never read the recommendation state manager's internal cache directly.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Recommendation creation | VALID input creates recommendation with stable ID and timeline |
+| Recommendation update | Confidence change appends timeline and preserves ID |
+| Duplicate merge | Same `(symbol, timeframe, strategy)` updates existing state |
+| Timeline append | Multiple updates accumulate chronological entries |
+| Event publish | `validated.recommendation` triggers `recommendation.state.updated` |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Consume only `validated.recommendation` | Quality-gated input; state reflects validated intelligence only |
+| Composite key includes strategy | Supports multi-strategy recommendations per symbol/timeframe |
+| Default strategy `default` | Backward compatible when strategy field absent from payload |
+| Merge duplicates in-place | Prevents recommendation ID proliferation |
+| Publish on every meaningful change | Downstream consumers receive incremental lifecycle updates |
+| In-memory state | Phase 5 scope; PostgreSQL persistence deferred to future phase |
+| No trade execution | Aligns with intelligence-platform scope |
+
+### Phase 5 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Recommendation State Manager | ✅ Complete |
+| 6 | Alert Engine | Planned |
+| 7 | Scanner Persistence | Planned |
+| 8 | Query Layer | Planned |
+

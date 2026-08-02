@@ -8,8 +8,10 @@ import (
 
 // IntelligenceConfig groups Stage 5 intelligence engine settings.
 type IntelligenceConfig struct {
-	Opportunity    OpportunityConfig    `mapstructure:"opportunity"`
-	Recommendation RecommendationConfig `mapstructure:"recommendation"`
+	Opportunity         OpportunityConfig         `mapstructure:"opportunity"`
+	Recommendation      RecommendationConfig      `mapstructure:"recommendation"`
+	Validation          ValidationEngineConfig    `mapstructure:"validation"`
+	RecommendationState RecommendationStateConfig `mapstructure:"recommendation_state"`
 }
 
 // OpportunityConfig controls the opportunity ranking engine.

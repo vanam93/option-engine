@@ -40,49 +40,53 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendation"
+	"github.com/vanam-gangireddy/option-engine/internal/recommendationstate"
 	"github.com/vanam-gangireddy/option-engine/internal/research"
 	"github.com/vanam-gangireddy/option-engine/internal/scanner"
+	intelvalidation "github.com/vanam-gangireddy/option-engine/internal/validation"
 	"github.com/vanam-gangireddy/option-engine/internal/walkforward"
 )
 
 // Container holds all wired dependencies.
 type Container struct {
-	Config             *config.Config
-	Logger             *slog.Logger
-	Clock              clock.Clock
-	Calendar           *calendar.Calendar
-	Metrics            metrics.Registry
-	SymbolRegistry     *symbolregistry.Registry
-	ProviderRegistry   *providers.Registry
-	ProviderManager    *providers.Manager
-	Cache              *cache.Cache
-	EventBus           *eventbus.Bus
-	Gateway            *gateway.Engine
-	Normalizer         *normalizer.Normalizer
-	Validator          *validator.Validator
-	Snapshot           func(time.Time) snapshot.Market
-	Subscription       *subscription.Manager
-	CandleEngine       *candle.Engine
-	IndicatorEngine    *indicator.Engine
-	SignalEngine       *signal.Engine
-	StrategyEngine     *strategy.Engine
-	RiskEngine         *risk.Engine
-	ExecutionAdapter   execution.ExecutionAdapter
-	PaperEngine        *paper.Engine
-	PortfolioEngine    *portfolio.Engine
-	PerformanceEngine  *performance.Engine
-	OptimizationEngine *optimization.Engine
-	ExperimentEngine   *experiments.Engine
-	WalkForwardEngine  *walkforward.Engine
-	MonteCarloEngine   *montecarlo.Engine
-	ResearchEngine     *research.Engine
-	ScannerEngine      *scanner.Engine
+	Config               *config.Config
+	Logger               *slog.Logger
+	Clock                clock.Clock
+	Calendar             *calendar.Calendar
+	Metrics              metrics.Registry
+	SymbolRegistry       *symbolregistry.Registry
+	ProviderRegistry     *providers.Registry
+	ProviderManager      *providers.Manager
+	Cache                *cache.Cache
+	EventBus             *eventbus.Bus
+	Gateway              *gateway.Engine
+	Normalizer           *normalizer.Normalizer
+	Validator            *validator.Validator
+	Snapshot             func(time.Time) snapshot.Market
+	Subscription         *subscription.Manager
+	CandleEngine         *candle.Engine
+	IndicatorEngine      *indicator.Engine
+	SignalEngine         *signal.Engine
+	StrategyEngine       *strategy.Engine
+	RiskEngine           *risk.Engine
+	ExecutionAdapter     execution.ExecutionAdapter
+	PaperEngine          *paper.Engine
+	PortfolioEngine      *portfolio.Engine
+	PerformanceEngine    *performance.Engine
+	OptimizationEngine   *optimization.Engine
+	ExperimentEngine     *experiments.Engine
+	WalkForwardEngine    *walkforward.Engine
+	MonteCarloEngine     *montecarlo.Engine
+	ResearchEngine       *research.Engine
+	ScannerEngine        *scanner.Engine
 	OpportunityEngine    *opportunity.Engine
-	RecommendationEngine *recommendation.Engine
-	BacktestEngine       *backtest.Engine
-	Postgres           *postgres.Pool
-	HTTPServer         *http.Server
-	WSServer           *ws.Hub
+	RecommendationEngine     *recommendation.Engine
+	ValidationEngine         *intelvalidation.Engine
+	RecommendationStateEngine *recommendationstate.Engine
+	BacktestEngine           *backtest.Engine
+	Postgres             *postgres.Pool
+	HTTPServer           *http.Server
+	WSServer             *ws.Hub
 }
 
 // NewContainer wires all application dependencies.
@@ -342,6 +346,24 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("recommendation engine: %w", err)
 	}
 
+	validationCfg, err := config.BuildValidationEngineConfig(cfg.ValidationEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("validation config: %w", err)
+	}
+	validationEngine, err := intelvalidation.New(validationCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("validation engine: %w", err)
+	}
+
+	recommendationStateCfg, err := config.BuildRecommendationStateEngineConfig(cfg.RecommendationStateEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("recommendation state config: %w", err)
+	}
+	recommendationStateEngine, err := recommendationstate.New(recommendationStateCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("recommendation state engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -365,6 +387,8 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, scannerEngine)
 	healthReporters = append(healthReporters, opportunityEngine)
 	healthReporters = append(healthReporters, recommendationEngine)
+	healthReporters = append(healthReporters, validationEngine)
+	healthReporters = append(healthReporters, recommendationStateEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -376,42 +400,44 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	wsHub := ws.NewHub(cfg, logger.WithModule(log, "websocket"))
 
 	return &Container{
-		Config:             cfg,
-		Logger:             log,
-		Clock:              clk,
-		Calendar:           cal,
-		Metrics:            metricReg,
-		SymbolRegistry:     symbols,
-		ProviderRegistry:   providerReg,
-		ProviderManager:    manager,
-		Cache:              cacheStore,
-		EventBus:           bus,
-		Gateway:            gatewayEngine,
-		Normalizer:         normalizerSvc,
-		Validator:          validatorSvc,
-		Snapshot:           snapshotBuilder,
-		Subscription:       subManager,
-		CandleEngine:       candleEngine,
-		IndicatorEngine:    indicatorEngine,
-		SignalEngine:       signalEngine,
-		StrategyEngine:     strategyEngine,
-		RiskEngine:         riskEngine,
-		ExecutionAdapter:   executionAdapter,
-		PaperEngine:        paperEngine,
-		PortfolioEngine:    portfolioEngine,
-		PerformanceEngine:  performanceEngine,
-		OptimizationEngine: optimizationEngine,
-		ExperimentEngine:   experimentEngine,
-		WalkForwardEngine:  walkForwardEngine,
-		MonteCarloEngine:   monteCarloEngine,
-		ResearchEngine:     researchEngine,
-		ScannerEngine:      scannerEngine,
+		Config:               cfg,
+		Logger:               log,
+		Clock:                clk,
+		Calendar:             cal,
+		Metrics:              metricReg,
+		SymbolRegistry:       symbols,
+		ProviderRegistry:     providerReg,
+		ProviderManager:      manager,
+		Cache:                cacheStore,
+		EventBus:             bus,
+		Gateway:              gatewayEngine,
+		Normalizer:           normalizerSvc,
+		Validator:            validatorSvc,
+		Snapshot:             snapshotBuilder,
+		Subscription:         subManager,
+		CandleEngine:         candleEngine,
+		IndicatorEngine:      indicatorEngine,
+		SignalEngine:         signalEngine,
+		StrategyEngine:       strategyEngine,
+		RiskEngine:           riskEngine,
+		ExecutionAdapter:     executionAdapter,
+		PaperEngine:          paperEngine,
+		PortfolioEngine:      portfolioEngine,
+		PerformanceEngine:    performanceEngine,
+		OptimizationEngine:   optimizationEngine,
+		ExperimentEngine:     experimentEngine,
+		WalkForwardEngine:    walkForwardEngine,
+		MonteCarloEngine:     monteCarloEngine,
+		ResearchEngine:       researchEngine,
+		ScannerEngine:        scannerEngine,
 		OpportunityEngine:    opportunityEngine,
 		RecommendationEngine: recommendationEngine,
-		BacktestEngine:     backtestEngine,
-		Postgres:           pool,
-		HTTPServer:         httpServer,
-		WSServer:           wsHub,
+		ValidationEngine:          validationEngine,
+		RecommendationStateEngine: recommendationStateEngine,
+		BacktestEngine:            backtestEngine,
+		Postgres:             pool,
+		HTTPServer:           httpServer,
+		WSServer:             wsHub,
 	}, nil
 }
 
@@ -438,6 +464,16 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
 				return err
 			}
+		}
+	}
+	if c.RecommendationStateEngine != nil {
+		if err := c.RecommendationStateEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.ValidationEngine != nil {
+		if err := c.ValidationEngine.Start(ctx); err != nil {
+			return err
 		}
 	}
 	if c.RecommendationEngine != nil {
@@ -576,6 +612,12 @@ func (c *Container) Close() {
 	}
 	if c.RecommendationEngine != nil {
 		_ = c.RecommendationEngine.Close()
+	}
+	if c.ValidationEngine != nil {
+		_ = c.ValidationEngine.Close()
+	}
+	if c.RecommendationStateEngine != nil {
+		_ = c.RecommendationStateEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()

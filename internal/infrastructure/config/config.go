@@ -452,6 +452,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("intelligence.recommendation.strong_buy_threshold", 0.85)
 	v.SetDefault("intelligence.recommendation.buy_threshold", 0.70)
 	v.SetDefault("intelligence.recommendation.watch_threshold", 0.40)
+
+	v.SetDefault("intelligence.validation.enabled", true)
+	v.SetDefault("intelligence.validation.subscriber_buffer", 256)
+	v.SetDefault("intelligence.validation.min_confidence", 0.70)
+	v.SetDefault("intelligence.validation.min_optimization_score", 0.60)
+	v.SetDefault("intelligence.validation.min_walkforward_score", 0.60)
+	v.SetDefault("intelligence.validation.min_montecarlo_score", 0.60)
+	v.SetDefault("intelligence.validation.min_win_rate", 0.50)
+	v.SetDefault("intelligence.validation.max_drawdown", 0.20)
+	v.SetDefault("intelligence.validation.freshness_seconds", 300)
+	v.SetDefault("intelligence.validation.suppress_duplicates", true)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.

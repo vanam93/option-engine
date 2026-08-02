@@ -230,3 +230,18 @@ intelligence:
     strong_buy_threshold: 0.85
     buy_threshold: 0.70
     watch_threshold: 0.40
+
+  validation:
+    enabled: true
+    min_confidence: 0.70
+    min_optimization_score: 0.60
+    min_walkforward_score: 0.60
+    min_montecarlo_score: 0.60
+    min_win_rate: 0.50
+    max_drawdown: 0.20
+    freshness_seconds: 300
+    suppress_duplicates: true
+
+  recommendation_state:
+    enabled: true
+    max_active: 10000

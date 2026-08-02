@@ -30,6 +30,8 @@ const (
 	ScannerUpdated          Type = "scanner.updated"
 	OpportunityUpdated      Type = "opportunity.updated"
 	RecommendationUpdated   Type = "recommendation.updated"
+	ValidatedRecommendation   Type = "validated.recommendation"
+	RecommendationStateUpdated Type = "recommendation.state.updated"
 	ContextEvaluated        Type = "context.evaluated"
 	StrategySignalGenerated Type = "strategy.signal.generated"
 	DecisionMade            Type = "decision.made"
