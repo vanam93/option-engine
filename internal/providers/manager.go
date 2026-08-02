@@ -79,6 +79,22 @@ func (m *Manager) Init() error {
 	})
 }
 
+// InitWithProvider wires a pre-built provider instance (for example backtest replay).
+func (m *Manager) InitWithProvider(p Provider) error {
+	if p == nil {
+		return fmt.Errorf("provider manager: nil provider")
+	}
+	m.mu.Lock()
+	m.provider = p
+	if m.session == nil {
+		m.session = newProviderSession(p)
+	} else {
+		m.session.SetProvider(p)
+	}
+	m.mu.Unlock()
+	return nil
+}
+
 // InitWithDeps creates the configured provider with injected dependencies.
 func (m *Manager) InitWithDeps(base FactoryConfig) error {
 	base.Reconnect = m.cfg.Reconnect

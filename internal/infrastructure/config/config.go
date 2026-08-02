@@ -27,6 +27,7 @@ type Config struct {
 	Analytics    AnalyticsConfig    `mapstructure:"analytics"`
 	Execution    ExecutionConfig    `mapstructure:"execution"`
 	Portfolio    PortfolioConfig    `mapstructure:"portfolio"`
+	Backtest     BacktestConfig     `mapstructure:"backtest"`
 }
 
 type HTTPConfig struct {
@@ -372,6 +373,11 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("portfolio.enabled", true)
 	v.SetDefault("portfolio.subscriber_buffer", 256)
+
+	v.SetDefault("backtest.enabled", false)
+	v.SetDefault("backtest.speed", "1x")
+	v.SetDefault("backtest.symbols", []string{"NIFTY"})
+	v.SetDefault("backtest.timeframe", "1m")
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -391,6 +397,8 @@ func (c *Config) PostgresDSN() string {
 // ActiveProviderConfig returns provider-specific settings for the selected provider.
 func (c *Config) ActiveProviderConfig() map[string]any {
 	switch c.Market.Provider {
+	case "backtest":
+		return c.Backtest.ToProviderConfig()
 	case "replay":
 		if c.Market.Replay != nil {
 			return c.Market.Replay

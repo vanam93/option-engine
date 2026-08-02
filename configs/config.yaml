@@ -146,3 +146,10 @@ execution:
 
 portfolio:
   enabled: true
+
+backtest:
+  enabled: false
+  speed: 1x
+  symbols:
+    - NIFTY
+  timeframe: 1m

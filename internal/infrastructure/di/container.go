@@ -15,6 +15,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/signal"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/strategy"
 	"github.com/vanam-gangireddy/option-engine/internal/application/ports"
+	"github.com/vanam-gangireddy/option-engine/internal/backtest"
 	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
@@ -60,6 +61,7 @@ type Container struct {
 	PaperEngine         *paper.Engine
 	PortfolioEngine     *portfolio.Engine
 	PerformanceEngine   *performance.Engine
+	BacktestEngine      *backtest.Engine
 	Postgres            *postgres.Pool
 	HTTPServer       *http.Server
 	WSServer         *ws.Hub
@@ -68,6 +70,24 @@ type Container struct {
 // NewContainer wires all application dependencies.
 func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*Container, error) {
 	clk := clock.NewSystem()
+
+	backtestSettings, err := config.BuildBacktestConfig(cfg.Backtest)
+	if err != nil {
+		return nil, fmt.Errorf("backtest config: %w", err)
+	}
+	if backtestSettings.Enabled {
+		cfg.Market.Provider = "backtest"
+	}
+
+	var backtestEngine *backtest.Engine
+	if backtestSettings.Enabled {
+		backtestEngine, err = backtest.New(backtestSettings, clk)
+		if err != nil {
+			return nil, fmt.Errorf("backtest engine: %w", err)
+		}
+		clk = backtestEngine.Clock()
+	}
+
 	metricReg := metrics.NewNoopRegistry()
 
 	symbols := symbolregistry.New()
@@ -119,6 +139,11 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("provider manager: %w", err)
+	}
+	if backtestEngine != nil {
+		if err := manager.InitWithProvider(backtestEngine.Provider()); err != nil {
+			return nil, fmt.Errorf("backtest provider: %w", err)
+		}
 	}
 
 	provider, err := manager.Provider()
@@ -232,6 +257,9 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, paperEngine)
 	healthReporters = append(healthReporters, portfolioEngine)
 	healthReporters = append(healthReporters, performanceEngine)
+	if backtestEngine != nil {
+		healthReporters = append(healthReporters, backtestEngine)
+	}
 	healthReporters = append(healthReporters, &postgresHealthAdapter{pool: pool})
 
 	moduleLog := logger.WithModule(log, "bootstrap")
@@ -263,6 +291,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		PaperEngine:         paperEngine,
 		PortfolioEngine:     portfolioEngine,
 		PerformanceEngine:   performanceEngine,
+		BacktestEngine:      backtestEngine,
 		Postgres:            pool,
 		HTTPServer:       httpServer,
 		WSServer:         wsHub,
@@ -279,14 +308,19 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			return err
 		}
 	}
-	if c.Subscription != nil && c.SymbolRegistry != nil {
-		instruments := c.SymbolRegistry.All()
-		symbols := make([]string, 0, len(instruments))
-		for _, inst := range instruments {
-			symbols = append(symbols, inst.Symbol)
+	if c.Subscription != nil {
+		symbols := c.backtestSymbols()
+		if len(symbols) == 0 && c.SymbolRegistry != nil {
+			instruments := c.SymbolRegistry.All()
+			symbols = make([]string, 0, len(instruments))
+			for _, inst := range instruments {
+				symbols = append(symbols, inst.Symbol)
+			}
 		}
-		if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
-			return err
+		if len(symbols) > 0 {
+			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
+				return err
+			}
 		}
 	}
 	if c.PerformanceEngine != nil {
@@ -371,9 +405,19 @@ func (c *Container) Close() {
 	if c.ProviderManager != nil {
 		_ = c.ProviderManager.Disconnect(ctx)
 	}
+	if c.BacktestEngine != nil {
+		_ = c.BacktestEngine.Close()
+	}
 	if c.Postgres != nil {
 		c.Postgres.Close()
 	}
+}
+
+func (c *Container) backtestSymbols() []string {
+	if c.Config == nil || !c.Config.Backtest.Enabled {
+		return nil
+	}
+	return append([]string(nil), c.Config.Backtest.Symbols...)
 }
 
 func toCalendarConfig(cfg *config.Config) calendar.Config {
