@@ -28,6 +28,7 @@ const (
 	MonteCarloCompleted     Type = "montecarlo.completed"
 	ResearchUpdated         Type = "research.updated"
 	ScannerUpdated          Type = "scanner.updated"
+	OpportunityUpdated      Type = "opportunity.updated"
 	ContextEvaluated        Type = "context.evaluated"
 	StrategySignalGenerated Type = "strategy.signal.generated"
 	DecisionMade            Type = "decision.made"

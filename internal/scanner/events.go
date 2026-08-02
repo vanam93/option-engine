@@ -15,14 +15,14 @@ const (
 
 // ScannerUpdated is the payload published on scanner.updated events.
 type ScannerUpdated struct {
-	Symbol        string    `json:"symbol"`
-	Timeframe     string    `json:"timeframe"`
-	ScannerName   string    `json:"scanner_name"`
-	Status        Status    `json:"status"`
-	Score         float64   `json:"score"`
-	Confidence    float64   `json:"confidence"`
-	MatchedRules  []string  `json:"matched_rules"`
-	Timestamp     time.Time `json:"timestamp"`
+	Symbol       string    `json:"symbol"`
+	Timeframe    string    `json:"timeframe"`
+	ScannerName  string    `json:"scanner_name"`
+	Status       Status    `json:"status"`
+	Score        float64   `json:"score"`
+	Confidence   float64   `json:"confidence"`
+	MatchedRules []string  `json:"matched_rules"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // InputSignal mirrors the SignalGenerated payload consumed by the scanner.

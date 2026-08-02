@@ -78,27 +78,27 @@ type QueryFilter struct {
 
 // ResearchBundle aggregates all persisted artifacts for an experiment.
 type ResearchBundle struct {
-	Experiment   ResearchExperiment    `json:"experiment"`
-	Optimization []OptimizationResult  `json:"optimization"`
-	WalkForward  []WalkForwardResult   `json:"walkforward"`
-	MonteCarlo   []MonteCarloResult    `json:"montecarlo"`
-	Reports      []ResearchReport      `json:"reports"`
+	Experiment   ResearchExperiment   `json:"experiment"`
+	Optimization []OptimizationResult `json:"optimization"`
+	WalkForward  []WalkForwardResult  `json:"walkforward"`
+	MonteCarlo   []MonteCarloResult   `json:"montecarlo"`
+	Reports      []ResearchReport     `json:"reports"`
 }
 
 // UnifiedReport is the in-memory report model generated from PostgreSQL data.
 type UnifiedReport struct {
-	ResearchID   string                `json:"research_id"`
-	ExperimentID string                `json:"experiment_id"`
-	Version      int                   `json:"version"`
-	Strategy     string                `json:"strategy"`
-	Symbol       string                `json:"symbol"`
-	Timeframe    string                `json:"timeframe"`
-	Parameters   json.RawMessage       `json:"parameters"`
-	Optimization []OptimizationResult  `json:"optimization"`
-	WalkForward  []WalkForwardResult   `json:"walkforward"`
-	MonteCarlo   []MonteCarloResult    `json:"montecarlo"`
-	Summary      ReportSummary         `json:"summary"`
-	GeneratedAt  time.Time             `json:"generated_at"`
+	ResearchID   string               `json:"research_id"`
+	ExperimentID string               `json:"experiment_id"`
+	Version      int                  `json:"version"`
+	Strategy     string               `json:"strategy"`
+	Symbol       string               `json:"symbol"`
+	Timeframe    string               `json:"timeframe"`
+	Parameters   json.RawMessage      `json:"parameters"`
+	Optimization []OptimizationResult `json:"optimization"`
+	WalkForward  []WalkForwardResult  `json:"walkforward"`
+	MonteCarlo   []MonteCarloResult   `json:"montecarlo"`
+	Summary      ReportSummary        `json:"summary"`
+	GeneratedAt  time.Time            `json:"generated_at"`
 }
 
 // ReportSummary holds headline metrics for dashboards and events.

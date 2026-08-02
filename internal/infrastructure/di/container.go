@@ -35,6 +35,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/market/subscription"
 	"github.com/vanam-gangireddy/option-engine/internal/market/validator"
 	"github.com/vanam-gangireddy/option-engine/internal/montecarlo"
+	"github.com/vanam-gangireddy/option-engine/internal/opportunity"
 	"github.com/vanam-gangireddy/option-engine/internal/optimization"
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
@@ -75,6 +76,7 @@ type Container struct {
 	MonteCarloEngine   *montecarlo.Engine
 	ResearchEngine     *research.Engine
 	ScannerEngine      *scanner.Engine
+	OpportunityEngine  *opportunity.Engine
 	BacktestEngine     *backtest.Engine
 	Postgres           *postgres.Pool
 	HTTPServer         *http.Server
@@ -320,6 +322,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("scanner engine: %w", err)
 	}
 
+	opportunityCfg, err := config.BuildOpportunityEngineConfig(cfg.OpportunityEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("opportunity config: %w", err)
+	}
+	opportunityEngine, err := opportunity.New(opportunityCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("opportunity engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -341,6 +352,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, monteCarloEngine)
 	healthReporters = append(healthReporters, researchEngine)
 	healthReporters = append(healthReporters, scannerEngine)
+	healthReporters = append(healthReporters, opportunityEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -382,6 +394,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		MonteCarloEngine:   monteCarloEngine,
 		ResearchEngine:     researchEngine,
 		ScannerEngine:      scannerEngine,
+		OpportunityEngine:  opportunityEngine,
 		BacktestEngine:     backtestEngine,
 		Postgres:           pool,
 		HTTPServer:         httpServer,
@@ -412,6 +425,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
 				return err
 			}
+		}
+	}
+	if c.OpportunityEngine != nil {
+		if err := c.OpportunityEngine.Start(ctx); err != nil {
+			return err
 		}
 	}
 	if c.ScannerEngine != nil {
@@ -534,6 +552,9 @@ func (c *Container) Close() {
 	}
 	if c.ScannerEngine != nil {
 		_ = c.ScannerEngine.Close()
+	}
+	if c.OpportunityEngine != nil {
+		_ = c.OpportunityEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()

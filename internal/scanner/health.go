@@ -47,12 +47,12 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, symb
 		LastEventTime: last,
 		Message:       "market scanner engine",
 		Details: map[string]string{
-			"enabled":           boolString(cfg.Enabled),
-			"symbols_scanned":   u64String(uint64(symbolsScanned)),
-			"events_processed":  u64String(h.eventsProcessed.Load()),
-			"matches_found":     u64String(h.matchesFound.Load()),
-			"scanner_count":     u64String(uint64(cfg.EnabledScannerCount())),
-			"dropped":           u64String(dropped),
+			"enabled":          boolString(cfg.Enabled),
+			"symbols_scanned":  u64String(uint64(symbolsScanned)),
+			"events_processed": u64String(h.eventsProcessed.Load()),
+			"matches_found":    u64String(h.matchesFound.Load()),
+			"scanner_count":    u64String(uint64(cfg.EnabledScannerCount())),
+			"dropped":          u64String(dropped),
 		},
 	}
 }

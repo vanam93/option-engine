@@ -212,3 +212,15 @@ scanner:
     macd: true
     trend: true
     ranking: true
+
+intelligence:
+  opportunity:
+    enabled: true
+    top_n: 20
+    weights:
+      signal: 0.20
+      strategy: 0.20
+      performance: 0.15
+      optimization: 0.15
+      walkforward: 0.15
+      montecarlo: 0.15

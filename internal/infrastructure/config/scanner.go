@@ -8,11 +8,11 @@ import (
 
 // ScannerConfig groups Stage 5 market scanner settings.
 type ScannerConfig struct {
-	Enabled          bool                   `mapstructure:"enabled"`
-	Symbols          []string               `mapstructure:"symbols"`
-	Scanners         ScannerRulesConfig     `mapstructure:"scanners"`
-	SubscriberBuffer int                    `mapstructure:"subscriber_buffer"`
-	MinConfidence    float64                `mapstructure:"min_confidence"`
+	Enabled          bool               `mapstructure:"enabled"`
+	Symbols          []string           `mapstructure:"symbols"`
+	Scanners         ScannerRulesConfig `mapstructure:"scanners"`
+	SubscriberBuffer int                `mapstructure:"subscriber_buffer"`
+	MinConfidence    float64            `mapstructure:"min_confidence"`
 }
 
 // ScannerRulesConfig toggles individual scanner rules.

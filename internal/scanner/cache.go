@@ -12,15 +12,15 @@ type symbolKey struct {
 
 // SymbolState holds the latest intelligence inputs for a symbol.
 type SymbolState struct {
-	Symbol      string
-	Timeframe   string
-	LastSignal  InputSignal
+	Symbol       string
+	Timeframe    string
+	LastSignal   InputSignal
 	LastDecision InputDecision
-	Performance InputPerformance
-	HasSignal   bool
-	HasDecision bool
-	HasPerf     bool
-	UpdatedAt   time.Time
+	Performance  InputPerformance
+	HasSignal    bool
+	HasDecision  bool
+	HasPerf      bool
+	UpdatedAt    time.Time
 }
 
 // Cache maintains per-symbol scanner state.

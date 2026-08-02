@@ -15,7 +15,7 @@ import (
 func sampleReport() research.UnifiedReport {
 	return research.UnifiedReport{
 		ResearchID:   "research-test",
-		ExperimentID:   "exp-test",
+		ExperimentID: "exp-test",
 		Version:      1,
 		Strategy:     "trend_following",
 		Symbol:       "NIFTY",

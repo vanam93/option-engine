@@ -13,10 +13,10 @@ import (
 func TestDIResolvesExecutionAdapter(t *testing.T) {
 	bus := eventbus.New()
 	paperEngine, err := paper.New(paper.Config{
-		Enabled:         true,
+		Enabled:          true,
 		SubscriberBuffer: 8,
-		SlippagePercent: 0.05,
-		DefaultPrice:    "100",
+		SlippagePercent:  0.05,
+		DefaultPrice:     "100",
 	}, bus, clock.NewSystem())
 	require.NoError(t, err)
 

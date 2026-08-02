@@ -34,6 +34,7 @@ type Config struct {
 	MonteCarlo   MonteCarloConfig   `mapstructure:"montecarlo"`
 	Research     ResearchConfig     `mapstructure:"research"`
 	Scanner      ScannerConfig      `mapstructure:"scanner"`
+	Intelligence IntelligenceConfig `mapstructure:"intelligence"`
 }
 
 type HTTPConfig struct {
@@ -433,6 +434,18 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("scanner.scanners.macd", true)
 	v.SetDefault("scanner.scanners.trend", true)
 	v.SetDefault("scanner.scanners.ranking", true)
+
+	v.SetDefault("intelligence.opportunity.enabled", true)
+	v.SetDefault("intelligence.opportunity.top_n", 20)
+	v.SetDefault("intelligence.opportunity.subscriber_buffer", 256)
+	v.SetDefault("intelligence.opportunity.buy_threshold", 0.70)
+	v.SetDefault("intelligence.opportunity.watch_threshold", 0.40)
+	v.SetDefault("intelligence.opportunity.weights.signal", 0.20)
+	v.SetDefault("intelligence.opportunity.weights.strategy", 0.20)
+	v.SetDefault("intelligence.opportunity.weights.performance", 0.15)
+	v.SetDefault("intelligence.opportunity.weights.optimization", 0.15)
+	v.SetDefault("intelligence.opportunity.weights.walkforward", 0.15)
+	v.SetDefault("intelligence.opportunity.weights.montecarlo", 0.15)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.

@@ -904,3 +904,294 @@ Run `go build ./...` and `go test ./...` before completion.
 | Ranking on every performance event | May publish frequently | Extra bus traffic | Always-current leader symbol |
 | No execution gateway | Direct paper path | Less abstraction for future brokers | Aligns with no-broker project goal |
 | Watchlist filter | Configured symbol list | Manual symbol management | Focused scanning for NSE intraday |
+
+---
+
+## Phase 2 — Confidence & Opportunity Ranking Engine
+
+Phase 2 introduces the **Opportunity Ranking Engine** (`internal/opportunity`). The engine consumes scanner intelligence and upstream analytics events, combines all available factors into a weighted confidence score, ranks every symbol, and publishes `opportunity.updated` events. It does **not** generate signals or execute trades.
+
+### Pipeline
+
+```text
+scanner.updated
+    ↓
+Opportunity Ranking Engine
+    ↓
+opportunity.updated
+```
+
+Supporting intelligence is accumulated from upstream events:
+
+```text
+signal.generated ────────┐
+strategy.decision ───────┤
+approved.trade.intent ───┤
+performance.updated ─────┼──► Opportunity Cache ──► Score ──► Rank ──► opportunity.updated
+optimization.updated ────┤
+walkforward.completed ───┤
+montecarlo.completed ────┘
+```
+
+Ranking is triggered when `scanner.updated` arrives. Other events update the per-symbol and platform cache without publishing.
+
+### Goals
+
+| Goal | Detail |
+|------|--------|
+| Rank opportunities | Combine multi-source intelligence into a single confidence score per symbol |
+| Classify tiers | Assign `BUY`, `WATCH`, or `IGNORE` based on configurable thresholds |
+| Top-N selection | Maintain and publish the highest-ranked opportunities |
+| No signal generation | Read-only intelligence aggregation; never emits trade signals |
+| Configurable weights | Runtime-tunable factor weights for scoring formula |
+| Event-driven | Consume bus events only; no provider or broker dependencies |
+
+### Package layout
+
+```text
+internal/opportunity/
+├── engine.go       # Lifecycle, event subscription, ranking trigger, publish
+├── config.go       # Enabled, top_n, thresholds, weights
+├── scoring.go      # Weighted confidence computation and classification
+├── ranking.go      # Symbol ranking, top-N selection, summary stats
+├── cache.go        # Per-symbol and platform intelligence state
+├── events.go       # OpportunityUpdated payload types
+├── health.go       # Health reporter
+├── errors.go       # Structured errors
+├── scoring_test.go # Confidence, ranking, classification tests
+└── engine_test.go  # Event publish integration test
+```
+
+Configuration wiring: `internal/infrastructure/config/opportunity.go`
+
+### Scoring model
+
+Weighted confidence score per symbol:
+
+```text
+base = (w_signal       × signal_confidence
+      + w_strategy     × strategy_confidence
+      + w_performance  × performance_score
+      + w_optimization × optimization_score
+      + w_walkforward  × walkforward_validation_score
+      + w_montecarlo   × monte_carlo_probability) / Σweights
+
+confidence = base × risk_factor
+```
+
+| Factor | Source event | Normalization |
+|--------|-------------|---------------|
+| Signal confidence | `signal.generated` | Direct `confidence` field; falls back to scanner confidence |
+| Strategy confidence | `strategy.decision` | Direct `confidence` field |
+| Risk approval | `approved.trade.intent` | `risk_factor = 1.0` if APPROVED, else `0.6` multiplier |
+| Performance | `performance.updated` | `win_rate × 0.6 + normalize(pnl) × 0.4` |
+| Optimization | `optimization.updated` | Direct `score` field (clamped 0–1) |
+| Walk-forward | `walkforward.completed` | Platform-level `validation_score` |
+| Monte Carlo | `montecarlo.completed` | Platform-level `probability_of_profit` |
+
+### Classification
+
+| Classification | Condition | Purpose |
+|----------------|-----------|---------|
+| `BUY` | `confidence ≥ buy_threshold` (default 0.70) | High-conviction opportunity |
+| `WATCH` | `watch_threshold ≤ confidence < buy_threshold` (default 0.40–0.70) | Monitor for improvement |
+| `IGNORE` | `confidence < watch_threshold` | Low priority |
+
+### Ranking
+
+1. Score all symbols in cache.
+2. Sort by confidence descending (symbol name tiebreaker).
+3. Assign rank 1…N.
+4. Select top `top_n` candidates (default 20).
+5. Publish `opportunity.updated` for each top-N symbol.
+
+### Event contract: `opportunity.updated`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `symbol` | string | Instrument symbol |
+| `timeframe` | string | Bar timeframe |
+| `rank` | int | Rank among all scored symbols (1 = best) |
+| `confidence` | float64 | Weighted confidence score (0–1) |
+| `classification` | string | `BUY`, `WATCH`, or `IGNORE` |
+| `score` | float64 | Same as confidence |
+| `components` | object | Per-factor score breakdown |
+| `timestamp` | time | Evaluation timestamp |
+
+#### `components` object
+
+| Key | Description |
+|-----|-------------|
+| `signal` | Signal confidence contribution |
+| `strategy` | Strategy confidence contribution |
+| `performance` | Performance score contribution |
+| `optimization` | Optimization score contribution |
+| `walkforward` | Walk-forward validation contribution |
+| `montecarlo` | Monte Carlo robustness contribution |
+| `risk_factor` | Risk approval multiplier applied |
+
+### Configuration
+
+```yaml
+intelligence:
+  opportunity:
+    enabled: true
+    top_n: 20
+    subscriber_buffer: 256
+    buy_threshold: 0.70
+    watch_threshold: 0.40
+    weights:
+      signal: 0.20
+      strategy: 0.20
+      performance: 0.15
+      optimization: 0.15
+      walkforward: 0.15
+      montecarlo: 0.15
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable opportunity ranking engine |
+| `top_n` | `20` | Number of top candidates to publish |
+| `subscriber_buffer` | `256` | Event bus subscriber buffer |
+| `buy_threshold` | `0.70` | Minimum confidence for BUY classification |
+| `watch_threshold` | `0.40` | Minimum confidence for WATCH classification |
+| `weights.signal` | `0.20` | Signal confidence weight |
+| `weights.strategy` | `0.20` | Strategy confidence weight |
+| `weights.performance` | `0.15` | Performance statistics weight |
+| `weights.optimization` | `0.15` | Optimization score weight |
+| `weights.walkforward` | `0.15` | Walk-forward validation weight |
+| `weights.montecarlo` | `0.15` | Monte Carlo robustness weight |
+
+### Engine lifecycle
+
+#### Startup order
+
+Opportunity Engine subscribes **before** Scanner Engine publishes:
+
+```text
+Opportunity → Scanner → Research → … → Performance → Strategy → Signal → … → Gateway
+```
+
+#### Shutdown order (reverse)
+
+```text
+Gateway → … → Signal → Strategy → Performance → … → Scanner → Opportunity → Research
+```
+
+#### Lifecycle steps
+
+1. `New(cfg, bus, clk)` — validate config, allocate cache, scorer, ranker.
+2. `Start(ctx)` — subscribe to intelligence events, launch consumer goroutine.
+3. Consumer loop — update cache on upstream events; rank and publish on `scanner.updated`.
+4. `Close()` — cancel context, drain subscription, wait on WaitGroup, close subscription.
+
+### Component diagram
+
+```mermaid
+flowchart LR
+    subgraph opportunity_pkg["internal/opportunity"]
+        ENG[Engine]
+        CFG[Config]
+        SCORE[Scorer]
+        RANK[Ranker]
+        CACHE[Cache]
+        EVT[Events]
+        HLTH[Health]
+    end
+
+    ENG --> CFG
+    ENG --> SCORE
+    ENG --> RANK
+    ENG --> CACHE
+    ENG --> EVT
+    ENG --> HLTH
+    SCORE --> CACHE
+    RANK --> SCORE
+```
+
+### Event flow
+
+```mermaid
+sequenceDiagram
+    participant SCAN as Market Scanner
+    participant BUS as EventBus
+    participant OPP as Opportunity Engine
+    participant CACHE as Cache
+
+    Note over OPP,CACHE: Upstream events populate cache
+    BUS->>OPP: signal.generated / strategy.decision / …
+    OPP->>CACHE: Apply intelligence factor
+
+    SCAN->>BUS: scanner.updated
+    BUS->>OPP: scanner.updated
+    OPP->>CACHE: Apply scanner match
+    OPP->>OPP: Score all symbols
+    OPP->>OPP: Rank and select top N
+    OPP->>BUS: opportunity.updated (per top candidate)
+```
+
+### Health monitoring
+
+`GET /health/components` includes `opportunity_engine`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether engine is configured on |
+| `opportunities_ranked` | Total symbols scored in last ranking pass |
+| `top_candidates` | Number of top-N candidates published |
+| `average_confidence` | Mean confidence across all ranked symbols |
+| `buy_count` | Symbols classified as BUY |
+| `watch_count` | Symbols classified as WATCH |
+| `ignore_count` | Symbols classified as IGNORE |
+| `dropped` | Subscription dropped event count |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Cache | `sync.Mutex` on per-symbol and platform maps |
+| Engine lifecycle | `sync.Mutex` on started/closed flags |
+| Summary / health | Updated under engine mutex after each ranking pass |
+| Event processing | Single consumer goroutine |
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Malformed event payload | Skip silently; no publish |
+| Missing factor data | Factor contributes 0 to score |
+| No symbols in cache on scanner trigger | No publish |
+| Bus publish error | Skip; health summary still updated |
+| Shutdown mid-event | Drain subscription before exit |
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Confidence calculation | Weighted score matches expected formula |
+| Ranking order | Higher-confidence symbols rank first |
+| BUY classification | High-confidence symbols classified BUY |
+| WATCH classification | Mid-confidence symbols classified WATCH |
+| Event publish | `scanner.updated` triggers `opportunity.updated` |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Rank on `scanner.updated` only | Matches documented pipeline; scanner is intelligence trigger |
+| Cache from multiple event types | Scoring requires all factors; single-event trigger insufficient |
+| Platform-level walk-forward/Monte Carlo | Research events are experiment-scoped; applied as platform robustness |
+| Risk as multiplier not weight | Keeps weight sum at 1.0; risk gates confidence without dominating |
+| Publish top-N only | Reduces bus noise; dashboards consume ranked shortlist |
+| No signal generation | Intelligence platform ranks opportunities; does not trade |
+
+### Phase 2 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Alert Engine | Planned |
+| 4 | Scanner Persistence | Planned |
+| 5 | Query Layer | Planned |
