@@ -29,6 +29,7 @@ type Provider struct {
 	paused         bool
 	control        chan struct{}
 	stop           chan struct{}
+	wg             sync.WaitGroup
 }
 
 // Register adds the replay provider factory to the registry.
@@ -143,18 +144,25 @@ func (p *Provider) Connect(ctx context.Context) error {
 	}
 	p.connected = true
 	p.stop = make(chan struct{})
-	go p.replayLoop(p.stop)
+	p.wg = sync.WaitGroup{}
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.replayLoop(p.stop)
+	}()
 	return nil
 }
 
 func (p *Provider) Disconnect(ctx context.Context) error {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if !p.connected {
+		p.mu.Unlock()
 		return nil
 	}
 	close(p.stop)
 	p.connected = false
+	p.mu.Unlock()
+	p.wg.Wait()
 	return nil
 }
 

@@ -2,17 +2,18 @@ package mock
 
 import (
 	"context"
+	"log/slog"
 	"math/rand/v2"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
+	"github.com/vanam-gangireddy/option-engine/internal/market/normalizer"
 	"github.com/vanam-gangireddy/option-engine/internal/providers/api"
 )
 
@@ -30,6 +31,7 @@ type Provider struct {
 	tickInterval   time.Duration
 	rng            *rand.Rand
 	stop           chan struct{}
+	wg             sync.WaitGroup
 }
 
 // Register adds the mock provider factory to the registry.
@@ -88,18 +90,25 @@ func (p *Provider) Connect(ctx context.Context) error {
 	}
 	p.connected = true
 	p.stop = make(chan struct{})
-	go p.emitLoop(p.stop)
+	p.wg = sync.WaitGroup{}
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.emitLoop(p.stop)
+	}()
 	return nil
 }
 
 func (p *Provider) Disconnect(ctx context.Context) error {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if !p.connected {
+		p.mu.Unlock()
 		return nil
 	}
 	close(p.stop)
 	p.connected = false
+	p.mu.Unlock()
+	p.wg.Wait()
 	return nil
 }
 
@@ -123,6 +132,10 @@ func (p *Provider) Unsubscribe(ctx context.Context, symbols []string) error {
 
 func (p *Provider) Events() <-chan events.Event { return p.events }
 
+func (p *Provider) SetRawPayloadMode(enabled bool) {
+	_ = enabled
+}
+
 func (p *Provider) Health() health.Report {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -141,57 +154,69 @@ func (p *Provider) Health() health.Report {
 }
 
 func (p *Provider) emitLoop(stop <-chan struct{}) {
-	ticker := time.NewTicker(p.tickInterval)
-	defer ticker.Stop()
-
 	price := 22500.0
 	for {
 		select {
 		case <-stop:
 			return
-		case <-ticker.C:
-			p.mu.RLock()
-			symbols := make([]string, 0, len(p.subscribed))
-			for s := range p.subscribed {
-				symbols = append(symbols, s)
-			}
-			p.mu.RUnlock()
-			sort.Strings(symbols)
+		default:
+		}
+		p.mu.RLock()
+		tickInterval := p.tickInterval
+		p.mu.RUnlock()
+		timer := time.NewTimer(tickInterval)
+		select {
+		case <-stop:
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		p.mu.RLock()
+		symbols := make([]string, 0, len(p.subscribed))
+		for s := range p.subscribed {
+			symbols = append(symbols, s)
+		}
+		p.mu.RUnlock()
+		sort.Strings(symbols)
 
-			if len(symbols) == 0 {
+		if len(symbols) == 0 {
+			continue
+		}
+
+		now := p.clk.Now()
+		for _, symbol := range symbols {
+			p.mu.Lock()
+			price += (p.rng.Float64() - 0.48) * 8
+			p.mu.Unlock()
+			if price < 1 {
+				price = 1
+			}
+			payload := normalizer.Payload{
+				Symbol:         symbol,
+				Exchange:       "NSE",
+				InstrumentType: market.InstrumentIndex,
+				LTP:            price,
+				Open:           price - 2, High: price + 3, Low: price - 3, Close: price - 1,
+				Bid: price - .25, Ask: price + .25, BidQty: 50, AskQty: 60, Volume: 1000, OI: 500,
+				Timestamp: now,
+			}
+			var evt events.Event
+			var err error
+			evt, err = events.NewEventWithClock(p.clk, events.MarketDataReceived, providerName, payload)
+			if err != nil {
 				continue
 			}
-
-			now := p.clk.Now()
-			for _, symbol := range symbols {
+			slog.Debug("provider emitted event",
+				"provider", providerName,
+				"symbol", symbol,
+				"timestamp", now,
+			)
+			select {
+			case p.events <- evt:
 				p.mu.Lock()
-				price += (p.rng.Float64() - 0.48) * 8
+				p.lastEvent = &now
 				p.mu.Unlock()
-				if price < 1 {
-					price = 1
-				}
-				tick := market.Tick{
-					ID:             uuid.New(),
-					Symbol:         symbol,
-					Exchange:       "NSE",
-					InstrumentType: market.InstrumentIndex,
-					LTP:            price,
-					Open:           price - 2, High: price + 3, Low: price - 3, Close: price - 1,
-					Bid: price - .25, Ask: price + .25, BidQty: 50, AskQty: 60, Volume: 1000, OI: 500,
-					ProviderTS: now,
-					ReceivedAt: now,
-				}
-				evt, err := events.NewEventWithClock(p.clk, events.MarketDataReceived, providerName, tick)
-				if err != nil {
-					continue
-				}
-				select {
-				case p.events <- evt:
-					p.mu.Lock()
-					p.lastEvent = &now
-					p.mu.Unlock()
-				default:
-				}
+			default:
 			}
 		}
 	}

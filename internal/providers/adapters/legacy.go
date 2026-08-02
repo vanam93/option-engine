@@ -2,10 +2,8 @@ package adapters
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 
-	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/option"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
@@ -41,7 +39,6 @@ func (a *LegacyProviderAdapter) Connect(ctx context.Context) error {
 	a.connected = true
 	a.stop = make(chan struct{})
 	a.mu.Unlock()
-	go a.fanOut()
 	return nil
 }
 
@@ -73,40 +70,4 @@ func (a *LegacyProviderAdapter) IsConnected() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.connected
-}
-
-func (a *LegacyProviderAdapter) fanOut() {
-	eventCh := a.inner.Events()
-	for {
-		select {
-		case <-a.stop:
-			return
-		case evt, ok := <-eventCh:
-			if !ok {
-				return
-			}
-			a.dispatch(evt)
-		}
-	}
-}
-
-func (a *LegacyProviderAdapter) dispatch(evt events.Event) {
-	switch evt.Type {
-	case events.MarketDataReceived:
-		var tick market.Tick
-		if err := json.Unmarshal(evt.Payload, &tick); err == nil {
-			select {
-			case a.ticks <- tick:
-			default:
-			}
-		}
-	case events.OptionChainUpdated:
-		var chain option.OptionChainSnapshot
-		if err := json.Unmarshal(evt.Payload, &chain); err == nil {
-			select {
-			case a.chains <- chain:
-			default:
-			}
-		}
-	}
 }

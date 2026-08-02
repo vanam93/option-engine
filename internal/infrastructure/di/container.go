@@ -16,7 +16,14 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/postgres"
+	"github.com/vanam-gangireddy/option-engine/internal/market/cache"
+	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
+	"github.com/vanam-gangireddy/option-engine/internal/market/gateway"
+	"github.com/vanam-gangireddy/option-engine/internal/market/normalizer"
 	symbolregistry "github.com/vanam-gangireddy/option-engine/internal/market/registry"
+	"github.com/vanam-gangireddy/option-engine/internal/market/snapshot"
+	"github.com/vanam-gangireddy/option-engine/internal/market/subscription"
+	"github.com/vanam-gangireddy/option-engine/internal/market/validator"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
 )
 
@@ -30,6 +37,13 @@ type Container struct {
 	SymbolRegistry   *symbolregistry.Registry
 	ProviderRegistry *providers.Registry
 	ProviderManager  *providers.Manager
+	Cache            *cache.Cache
+	EventBus         *eventbus.Bus
+	Gateway          *gateway.Engine
+	Normalizer       *normalizer.Normalizer
+	Validator        *validator.Validator
+	Snapshot         func(time.Time) snapshot.Market
+	Subscription     *subscription.Manager
 	Postgres         *postgres.Pool
 	HTTPServer       *http.Server
 	WSServer         *ws.Hub
@@ -91,6 +105,21 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("provider manager: %w", err)
 	}
 
+	provider, err := manager.Provider()
+	if err != nil {
+		return nil, fmt.Errorf("provider runtime: %w", err)
+	}
+
+	cacheStore := cache.New()
+	bus := eventbus.New()
+	validatorSvc := validator.New(validator.Config{MaxAge: cfg.Validation.MaxTickAge, RequireRegisteredSymbol: true}, symbols)
+	normalizerSvc := normalizer.New(clk.Now)
+	gatewayEngine := gateway.New(manager.Session(), cacheStore, bus, validatorSvc, normalizerSvc, clk.Now)
+	subManager := subscription.New(provider, cfg.Subscription.BatchSize)
+	snapshotBuilder := func(at time.Time) snapshot.Market {
+		return snapshot.New(cacheStore, at)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -119,16 +148,52 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		SymbolRegistry:   symbols,
 		ProviderRegistry: providerReg,
 		ProviderManager:  manager,
+		Cache:            cacheStore,
+		EventBus:         bus,
+		Gateway:          gatewayEngine,
+		Normalizer:       normalizerSvc,
+		Validator:        validatorSvc,
+		Snapshot:         snapshotBuilder,
+		Subscription:     subManager,
 		Postgres:         pool,
 		HTTPServer:       httpServer,
 		WSServer:         wsHub,
 	}, nil
 }
 
+// StartRuntime connects the provider and starts the market pipeline.
+func (c *Container) StartRuntime(ctx context.Context) error {
+	if c.ProviderManager != nil {
+		if c.Subscription != nil {
+			c.ProviderManager.SetSubscriptionManager(c.Subscription)
+		}
+		if err := c.ProviderManager.Connect(ctx); err != nil {
+			return err
+		}
+	}
+	if c.Subscription != nil && c.SymbolRegistry != nil {
+		instruments := c.SymbolRegistry.All()
+		symbols := make([]string, 0, len(instruments))
+		for _, inst := range instruments {
+			symbols = append(symbols, inst.Symbol)
+		}
+		if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
+			return err
+		}
+	}
+	if c.Gateway != nil {
+		return c.Gateway.Start(ctx)
+	}
+	return nil
+}
+
 // Close releases all resources.
 func (c *Container) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if c.Gateway != nil {
+		_ = c.Gateway.Close()
+	}
 	if c.ProviderManager != nil {
 		_ = c.ProviderManager.Disconnect(ctx)
 	}

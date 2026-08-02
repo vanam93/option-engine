@@ -2,10 +2,11 @@
 package snapshot
 
 import (
+	"time"
+
 	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/option"
 	"github.com/vanam-gangireddy/option-engine/internal/market/cache"
-	"time"
 )
 
 type Market struct {
@@ -16,16 +17,29 @@ type Market struct {
 }
 
 func New(c *cache.Cache, at time.Time) Market {
-	m := Market{At: at.UTC(), Ticks: c.Ticks(), Chains: map[string]option.OptionChainSnapshot{}, Depths: map[string]cache.Depth{}}
-	for s := range m.Ticks {
-		if d, ok := c.Depth(s); ok {
-			m.Depths[s] = d
+	m := Market{At: at.UTC(), Ticks: map[string]market.Tick{}, Chains: map[string]option.OptionChainSnapshot{}, Depths: map[string]cache.Depth{}}
+	for symbol, tick := range c.Ticks() {
+		m.Ticks[symbol] = cloneTick(tick)
+		if d, ok := c.Depth(symbol); ok {
+			m.Depths[symbol] = cloneDepth(d)
 		}
-	}
-	for _, t := range m.Ticks {
-		if ch, ok := c.Chain(t.Symbol); ok {
-			m.Chains[t.Symbol] = ch
+		if ch, ok := c.Chain(symbol); ok {
+			m.Chains[symbol] = cloneChain(ch)
 		}
 	}
 	return m
+}
+
+func cloneTick(t market.Tick) market.Tick {
+	return t
+}
+
+func cloneDepth(d cache.Depth) cache.Depth {
+	return cache.Depth{Bids: append([]cache.DepthLevel(nil), d.Bids...), Asks: append([]cache.DepthLevel(nil), d.Asks...)}
+}
+
+func cloneChain(ch option.OptionChainSnapshot) option.OptionChainSnapshot {
+	clone := ch
+	clone.Contracts = append([]option.OptionContract(nil), ch.Contracts...)
+	return clone
 }

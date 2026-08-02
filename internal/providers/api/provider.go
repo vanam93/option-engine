@@ -41,6 +41,12 @@ func RequiresOptionChain(c Capabilities) bool { return c.OptionChain }
 // RequiresReplay checks replay support.
 func RequiresReplay(c Capabilities) bool { return c.Replay }
 
+// EventSource exposes the runtime-facing provider events and health surface.
+type EventSource interface {
+	Events() <-chan events.Event
+	Health() health.Report
+}
+
 // Provider is the plugin contract for all market data sources.
 type Provider interface {
 	Name() string

@@ -8,14 +8,53 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	"github.com/vanam-gangireddy/option-engine/internal/market/subscription"
+	providerapi "github.com/vanam-gangireddy/option-engine/internal/providers/api"
 )
 
 // Manager owns the lifecycle of the active market data provider.
 type Manager struct {
+	mu           sync.RWMutex
+	provider     Provider
+	reg          *Registry
+	cfg          ManagerConfig
+	subscription *subscription.Manager
+	session      *providerSession
+}
+
+type providerSession struct {
 	mu       sync.RWMutex
 	provider Provider
-	reg      *Registry
-	cfg      ManagerConfig
+}
+
+func newProviderSession(p Provider) *providerSession {
+	return &providerSession{provider: p}
+}
+
+func (s *providerSession) Events() <-chan events.Event {
+	s.mu.RLock()
+	p := s.provider
+	s.mu.RUnlock()
+	if p == nil {
+		return nil
+	}
+	return p.Events()
+}
+
+func (s *providerSession) Health() health.Report {
+	s.mu.RLock()
+	p := s.provider
+	s.mu.RUnlock()
+	if p == nil {
+		return health.Report{Component: "provider_session", Status: health.StatusUnhealthy, Message: "provider session not initialized"}
+	}
+	return p.Health()
+}
+
+func (s *providerSession) SetProvider(p Provider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.provider = p
 }
 
 // ManagerConfig drives provider selection and runtime behaviour.
@@ -55,6 +94,11 @@ func (m *Manager) InitWithDeps(base FactoryConfig) error {
 	}
 	m.mu.Lock()
 	m.provider = p
+	if m.session == nil {
+		m.session = newProviderSession(p)
+	} else {
+		m.session.SetProvider(p)
+	}
 	m.mu.Unlock()
 	return nil
 }
@@ -65,7 +109,13 @@ func (m *Manager) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return p.Connect(ctx)
+	if err := p.Connect(ctx); err != nil {
+		return err
+	}
+	if m.subscription != nil {
+		_ = m.subscription.Recover(ctx, p)
+	}
+	return nil
 }
 
 // Disconnect disconnects the active provider.
@@ -99,6 +149,13 @@ func (m *Manager) Subscribe(ctx context.Context, symbols []string) error {
 	return nil
 }
 
+// SetSubscriptionManager wires the stateful subscription tracker into the provider lifecycle.
+func (m *Manager) SetSubscriptionManager(sub *subscription.Manager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.subscription = sub
+}
+
 // Unsubscribe delegates to the active provider.
 func (m *Manager) Unsubscribe(ctx context.Context, symbols []string) error {
 	p, err := m.active()
@@ -108,18 +165,32 @@ func (m *Manager) Unsubscribe(ctx context.Context, symbols []string) error {
 	return p.Unsubscribe(ctx, symbols)
 }
 
-// Events returns the event stream from the active provider.
+// Events is intentionally unavailable for runtime use; the gateway is the sole consumer of provider events.
 func (m *Manager) Events() (<-chan events.Event, error) {
-	p, err := m.active()
-	if err != nil {
-		return nil, err
-	}
-	return p.Events(), nil
+	return nil, fmt.Errorf("provider manager no longer exposes raw provider events")
 }
 
 // Provider returns the active provider instance.
 func (m *Manager) Provider() (Provider, error) {
 	return m.active()
+}
+
+// Session returns the runtime event source backed by the active provider.
+func (m *Manager) Session() providerapi.EventSource {
+	m.mu.RLock()
+	if m.session != nil {
+		s := m.session
+		m.mu.RUnlock()
+		return s
+	}
+	m.mu.RUnlock()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.session == nil {
+		m.session = newProviderSession(nil)
+	}
+	return m.session
 }
 
 // Health aggregates health from the active provider.
@@ -151,9 +222,20 @@ func (m *Manager) Switch(ctx context.Context, name string) error {
 	m.mu.Lock()
 	m.provider = p
 	m.cfg.ActiveProvider = name
+	if m.session == nil {
+		m.session = newProviderSession(p)
+	} else {
+		m.session.SetProvider(p)
+	}
 	m.mu.Unlock()
 
-	return p.Connect(ctx)
+	if err := p.Connect(ctx); err != nil {
+		return err
+	}
+	if m.subscription != nil {
+		_ = m.subscription.Recover(ctx, p)
+	}
+	return nil
 }
 
 func (m *Manager) active() (Provider, error) {

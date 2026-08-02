@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,6 +28,7 @@ func main() {
 	}
 
 	log := logger.New(cfg.Logging.Level, cfg.Logging.Format)
+	slog.SetDefault(log)
 	log.Info("starting option-engine", "env", cfg.Env)
 
 	ctx := context.Background()
@@ -37,12 +39,11 @@ func main() {
 	}
 	defer container.Close()
 
-	// Connect market data provider (config-driven)
-	if err := container.ProviderManager.Connect(ctx); err != nil {
-		log.Error("provider connect failed", "provider", cfg.Market.Provider, "error", err)
+	if err := container.StartRuntime(ctx); err != nil {
+		log.Error("runtime start failed", "provider", cfg.Market.Provider, "error", err)
 		os.Exit(1)
 	}
-	log.Info("market provider connected", "provider", cfg.Market.Provider)
+	log.Info("market runtime started", "provider", cfg.Market.Provider)
 
 	container.HTTPServer.RegisterWebSocket(cfg.WebSocket.Path, func(c *gin.Context) {
 		container.WSServer.HandleUpgrade(c.Writer, c.Request)
