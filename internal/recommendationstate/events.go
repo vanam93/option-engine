@@ -28,14 +28,14 @@ type TimelineEntry struct {
 
 // Recommendation holds the persistent lifecycle state for one recommendation.
 type Recommendation struct {
-	RecommendationID string    `json:"recommendation_id"`
-	Symbol           string    `json:"symbol"`
-	Timeframe        string    `json:"timeframe"`
-	Strategy         string    `json:"strategy"`
-	CurrentStatus    Status    `json:"current_status"`
-	Confidence       float64   `json:"confidence"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	RecommendationID string     `json:"recommendation_id"`
+	Symbol           string     `json:"symbol"`
+	Timeframe        string     `json:"timeframe"`
+	Strategy         string     `json:"strategy"`
+	CurrentStatus    Status     `json:"current_status"`
+	Confidence       float64    `json:"confidence"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 	ClosedAt         *time.Time `json:"closed_at,omitempty"`
 }
 
@@ -53,12 +53,12 @@ type RecommendationStateUpdated struct {
 
 // InputValidated mirrors the validated.recommendation payload consumed by the engine.
 type InputValidated struct {
-	Symbol             string
-	Timeframe          string
-	Strategy           string
-	Recommendation     recommendation.Level
-	Confidence         float64
-	ValidationStatus   string
-	RejectionReasons   []string
-	ValidatedAt        time.Time
+	Symbol           string
+	Timeframe        string
+	Strategy         string
+	Recommendation   recommendation.Level
+	Confidence       float64
+	ValidationStatus string
+	RejectionReasons []string
+	ValidatedAt      time.Time
 }

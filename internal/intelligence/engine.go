@@ -139,21 +139,21 @@ func (e *Engine) handle(evt events.Event) {
 
 func parseStateUpdate(payload json.RawMessage) (StateUpdate, bool) {
 	var raw struct {
-		RecommendationID     string            `json:"recommendation_id"`
-		Symbol               string            `json:"symbol"`
-		Timeframe            string            `json:"timeframe"`
-		Strategy             string            `json:"strategy"`
-		Recommendation       string            `json:"recommendation"`
-		CurrentStatus        string            `json:"current_status"`
-		Confidence           float64           `json:"confidence"`
-		LatestTimelineEntry  TimelineEntry     `json:"latest_timeline_entry"`
-		Summary              string            `json:"summary"`
-		Reasons              []string          `json:"reasons"`
-		SupportingIndicators []string          `json:"supporting_indicators"`
-		SupportingStrategies []string          `json:"supporting_strategies"`
-		OptimizationSummary  string            `json:"optimization_summary"`
-		WalkForwardSummary   string            `json:"walk_forward_summary"`
-		MonteCarloSummary    string            `json:"monte_carlo_summary"`
+		RecommendationID     string             `json:"recommendation_id"`
+		Symbol               string             `json:"symbol"`
+		Timeframe            string             `json:"timeframe"`
+		Strategy             string             `json:"strategy"`
+		Recommendation       string             `json:"recommendation"`
+		CurrentStatus        string             `json:"current_status"`
+		Confidence           float64            `json:"confidence"`
+		LatestTimelineEntry  TimelineEntry      `json:"latest_timeline_entry"`
+		Summary              string             `json:"summary"`
+		Reasons              []string           `json:"reasons"`
+		SupportingIndicators []string           `json:"supporting_indicators"`
+		SupportingStrategies []string           `json:"supporting_strategies"`
+		OptimizationSummary  string             `json:"optimization_summary"`
+		WalkForwardSummary   string             `json:"walk_forward_summary"`
+		MonteCarloSummary    string             `json:"monte_carlo_summary"`
 		Components           map[string]float64 `json:"components"`
 	}
 	if err := json.Unmarshal(payload, &raw); err != nil {

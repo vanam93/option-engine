@@ -61,7 +61,7 @@ type PerformanceView struct {
 
 // OptimizationView wraps persisted optimization data for an experiment.
 type OptimizationView struct {
-	Experiment   research.ResearchExperiment `json:"experiment"`
+	Experiment   research.ResearchExperiment   `json:"experiment"`
 	Optimization []research.OptimizationResult `json:"optimization"`
 }
 

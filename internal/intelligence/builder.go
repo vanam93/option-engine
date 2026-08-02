@@ -4,10 +4,10 @@ import "time"
 
 // Builder assembles intelligence documents from state updates.
 type Builder struct {
-	cfg      Config
-	fmt      *Formatter
+	cfg       Config
+	fmt       *Formatter
 	explainer *Explainer
-	summary  *SummaryBuilder
+	summary   *SummaryBuilder
 }
 
 // NewBuilder creates an intelligence document builder.
@@ -33,22 +33,22 @@ func (b *Builder) Build(update StateUpdate, timeline []TimelineEntry, previous *
 	explanation := b.explainer.BuildExplanation(update, level, evidence, upgrade, downgrade)
 
 	doc := IntelligenceDocument{
-		RecommendationID:             update.RecommendationID,
-		Symbol:                       update.Symbol,
-		Timeframe:                    update.Timeframe,
-		Strategy:                     update.Strategy,
-		RecommendationLevel:          level,
-		Confidence:                   update.Confidence,
-		CurrentStatus:                update.CurrentStatus,
-		CurrentRecommendationState:   b.fmt.StatusLabel(update.CurrentStatus),
-		DecisionSummary:              b.summary.DecisionSummary(update, level),
-		Explanation:                  explanation,
-		SupportingFactors:            b.explainer.SupportingFactors(update, evidence, level),
-		RiskFactors:                  b.explainer.RiskFactors(update, evidence),
-		ReasonForUpgrade:             upgrade,
-		ReasonForDowngrade:           downgrade,
-		ResearchEvidence:             evidence,
-		GeneratedAt:                  at,
+		RecommendationID:           update.RecommendationID,
+		Symbol:                     update.Symbol,
+		Timeframe:                  update.Timeframe,
+		Strategy:                   update.Strategy,
+		RecommendationLevel:        level,
+		Confidence:                 update.Confidence,
+		CurrentStatus:              update.CurrentStatus,
+		CurrentRecommendationState: b.fmt.StatusLabel(update.CurrentStatus),
+		DecisionSummary:            b.summary.DecisionSummary(update, level),
+		Explanation:                explanation,
+		SupportingFactors:          b.explainer.SupportingFactors(update, evidence, level),
+		RiskFactors:                b.explainer.RiskFactors(update, evidence),
+		ReasonForUpgrade:           upgrade,
+		ReasonForDowngrade:         downgrade,
+		ResearchEvidence:           evidence,
+		GeneratedAt:                at,
 	}
 
 	if b.cfg.IncludeResearch {

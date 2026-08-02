@@ -264,6 +264,14 @@ intelligence:
     good_threshold: 0.75
     average_threshold: 0.50
 
+  feedback:
+    enabled: true
+    subscriber_buffer: 256
+
+  delivery:
+    enabled: true
+    subscriber_buffer: 512
+
 api:
   enabled: true
   prefix: /api/v1

@@ -4100,3 +4100,237 @@ Component name: `feedback_engine`
 |-------|------|--------|
 | 10 | Recommendation Feedback & Learning Engine | ✅ Complete |
 
+---
+
+## Stage 5 Phase 11 — Recommendation Delivery Platform
+
+Phase 11 introduces the **Recommendation Delivery Platform** (`internal/delivery`). This engine is the **final recommendation aggregation layer** — a centralized read model optimized for consumption by dashboards, web, mobile, email, Telegram, WhatsApp, CLI, REST, and WebSocket surfaces.
+
+### Purpose
+
+Build a complete living object for every recommendation. Clients must never reconstruct information from multiple endpoints. Everything required for presentation must already exist in one delivery document.
+
+This platform is **read-model only**. It does not score, validate, generate alerts, evaluate quality, perform research, or modify recommendation logic.
+
+### Architecture
+
+```text
+recommendation.state.updated
+recommendation.intelligence.updated
+recommendation.quality.updated
+recommendation.feedback.updated
+alert.generated
+            ↓
+Recommendation Delivery Platform (internal/delivery)
+            ↓
+recommendation.delivery.updated
+            ├────────► Future Dashboard (Phase 12+)
+            ├────────► Future Web / Mobile
+            ├────────► Future REST API
+            └────────► Future WebSocket Streaming
+```
+
+| File | Responsibility |
+|------|----------------|
+| `engine.go` | Lifecycle, subscribe, consume, merge, publish, shutdown |
+| `builder.go` | Incremental document assembly from event inputs |
+| `timeline.go` | Ordered timeline merge and deduplication |
+| `repository.go` | Query methods over the cache |
+| `cache.go` | Thread-safe per-ID storage and secondary indexes |
+| `formatter.go` | Human-readable labels and summaries |
+| `models.go` | Delivery document and filter types |
+| `events.go` | Input/output payload types |
+| `config.go` | Runtime configuration |
+| `health.go` | Observability counters |
+| `errors.go` | Structured errors |
+
+### Responsibilities
+
+| Responsibility | Detail |
+|----------------|--------|
+| Consume events | Only the five upstream recommendation events |
+| Build documents | One consolidated `DeliveryDocument` per `RecommendationID` |
+| Incremental merge | Patch existing documents; never rebuild from scratch |
+| Timeline | Maintain ordered history of lifecycle events |
+| Indexes | Symbol, strategy, timeframe, status, level, confidence bucket, dates |
+| Publish | `recommendation.delivery.updated` on each document change |
+| Query | Repository exposes lookup and list methods |
+| Health | `recommendation_delivery_engine` metrics |
+
+### Pipeline
+
+1. `recommendation.state.updated` creates or updates base lifecycle fields and state timeline entries.
+2. `recommendation.intelligence.updated` merges research summary, intelligence summary, and evidence.
+3. `recommendation.quality.updated` merges quality evaluation and price/excursion metrics.
+4. `recommendation.feedback.updated` merges dimensional feedback and historical performance context.
+5. `alert.generated` appends alert history and timeline entries.
+6. Engine publishes `recommendation.delivery.updated` with the full document snapshot.
+
+### Incremental update model
+
+- One `storedDocument` per `RecommendationID` in cache.
+- Each event type calls a dedicated `Builder.Apply*` method that patches only relevant fields.
+- Indexes are updated incrementally on each merge (unindex old keys, index new keys).
+- Immutable copies are returned for publish and query paths.
+
+### Timeline model
+
+Ordered timeline entries with deduplication by event, timestamp, reason, and values:
+
+| Event | Source |
+|-------|--------|
+| Created | `recommendation.state.updated` |
+| Confidence Increased | `recommendation.state.updated` |
+| Confidence Decreased | `recommendation.state.updated` |
+| Status Changed | `recommendation.state.updated` |
+| Alert Generated | `alert.generated` |
+| Entry Triggered | First quality report with entry price |
+| Exit Recommended | `recommendation.state.updated` |
+| Closed | `recommendation.state.updated` |
+| Quality Evaluated | `recommendation.quality.updated` |
+| Feedback Updated | `recommendation.feedback.updated` |
+
+### Delivery document
+
+Each `DeliveryDocument` contains:
+
+- Recommendation metadata (ID, symbol, timeframe, strategy, level, status, confidence)
+- Timeline, research summary, intelligence summary, evidence
+- Alert history, quality evaluation, feedback metrics, historical performance
+- Price metrics (entry, latest, high, low, return, PnL, MFE, MAE, holding time)
+- Validation result, scanner matches, opportunity rank
+- Optimization, walk-forward, and Monte Carlo scores
+- Created, updated, and closed timestamps
+
+### Cache
+
+| Property | Detail |
+|----------|--------|
+| Concurrency | `sync.RWMutex` |
+| Storage | One object per `RecommendationID` |
+| Updates | Incremental field merge |
+| Indexes | ID, symbol, strategy, timeframe, status, level, confidence bucket, created date, updated date |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Engine goroutine | Single consumer |
+| Cache | `sync.RWMutex` |
+| Repository hit/miss counters | `atomic` uint64 |
+| Health counters | Updated from consumer goroutine |
+
+### Repository
+
+Query methods exposed for future API layers:
+
+| Method | Description |
+|--------|-------------|
+| `GetRecommendation(id)` | Single document by ID |
+| `ListRecommendations(filter)` | Filtered list |
+| `ListBySymbol(symbol)` | Documents for a symbol |
+| `ListByStrategy(strategy)` | Documents for a strategy |
+| `ListActive()` | Non-closed documents |
+| `ListClosed()` | Closed documents |
+| `LatestRecommendations(limit)` | Ordered by updated time |
+| `HighestConfidence(limit)` | Ordered by confidence |
+| `Newest(limit)` | Ordered by creation time |
+
+### Future dashboard integration
+
+Dashboard phases must consume `internal/delivery` repository methods or subscribe to `recommendation.delivery.updated`. They must **not** read directly from state, intelligence, quality, feedback, or alert engines.
+
+### Future mobile integration
+
+Mobile clients receive pre-built `DeliveryDocument` payloads — no client-side aggregation required.
+
+### Future websocket integration
+
+WebSocket streaming phases subscribe to `recommendation.delivery.updated` and push complete documents to connected clients.
+
+### Event contract
+
+**Inputs:** `recommendation.state.updated`, `recommendation.intelligence.updated`, `recommendation.quality.updated`, `recommendation.feedback.updated`, `alert.generated`
+
+**Output:** `recommendation.delivery.updated`
+
+```json
+{
+  "recommendation_id": "REC-20260802-NIFTY-000001",
+  "symbol": "NIFTY",
+  "timeframe": "1m",
+  "strategy": "ema_cross",
+  "document": { ... },
+  "generated_at": "2026-08-02T10:30:00Z"
+}
+```
+
+### Configuration
+
+```yaml
+intelligence:
+  delivery:
+    enabled: true
+    subscriber_buffer: 512
+```
+
+### Health
+
+Component name: `recommendation_delivery_engine`
+
+| Detail key | Description |
+|------------|-------------|
+| `documents` | Total delivery documents |
+| `active_documents` | Non-closed documents |
+| `closed_documents` | Closed documents |
+| `events_processed` | Upstream events handled |
+| `updates` | Delivery events published |
+| `cache_hits` | Repository cache hits |
+| `cache_misses` | Repository cache misses |
+| `timeline_entries` | Total timeline entries across documents |
+| `average_update_latency_ms` | Mean handle latency |
+| `dropped_events` | Dropped EventBus messages |
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Engine disabled | No subscription; graceful no-op |
+| Malformed payload | Skip silently; no publish |
+| Missing document for alert | Create document shell and apply alert |
+| EventBus backpressure | `dropped_events` counter incremented |
+| Publishing failure | Skip; engine continues |
+
+### Trade-offs
+
+| Decision | Rationale |
+|----------|-----------|
+| Single aggregation layer | Future phases never couple to upstream engines |
+| Incremental merge | Avoids full recomputation on every event |
+| Full document publish | Downstream consumers need complete state |
+| Feedback fan-out | Platform snapshot applied to all documents when feedback updates |
+| In-memory cache | Fast reads; persistence deferred to future storage phases |
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Document creation | State event creates delivery document |
+| Incremental update merge | Intelligence merges into existing document |
+| Timeline ordering | Entries sorted chronologically |
+| Alert append | Alert history and timeline |
+| Quality append | Quality metrics and entry triggered timeline |
+| Feedback append | Dimensional feedback metrics |
+| Lookup by ID | Get and cache miss |
+| Lookup by symbol / strategy | Index queries |
+| List active / closed | Status filtering |
+| Concurrency | Parallel state updates |
+| Graceful shutdown | Clean close |
+| Health metrics | Component and counters |
+
+### Phase 11 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 11 | Recommendation Delivery Platform | ✅ Complete |
+

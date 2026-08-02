@@ -7,12 +7,12 @@ import (
 )
 
 type healthSnapshot struct {
-	documentsGenerated   uint64
-	timelineSummaries    uint64
-	researchSummaries    uint64
-	upgradeExplanations  uint64
+	documentsGenerated    uint64
+	timelineSummaries     uint64
+	researchSummaries     uint64
+	upgradeExplanations   uint64
 	downgradeExplanations uint64
-	totalConfidence      float64
+	totalConfidence       float64
 }
 
 func (h *healthSnapshot) record(doc IntelligenceDocument, upgraded, downgraded bool) {
@@ -52,15 +52,15 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, docu
 		Connected: connected,
 		Message:   "recommendation intelligence engine",
 		Details: map[string]string{
-			"enabled":                 boolString(cfg.Enabled),
-			"documents_generated":     u64String(h.documentsGenerated),
-			"average_confidence":      floatString(avg),
-			"timeline_summaries":      u64String(h.timelineSummaries),
-			"research_summaries":      u64String(h.researchSummaries),
-			"upgrade_explanations":    u64String(h.upgradeExplanations),
-			"downgrade_explanations":  u64String(h.downgradeExplanations),
-			"cached_documents":        strconv.Itoa(documents),
-			"dropped":                 u64String(dropped),
+			"enabled":                boolString(cfg.Enabled),
+			"documents_generated":    u64String(h.documentsGenerated),
+			"average_confidence":     floatString(avg),
+			"timeline_summaries":     u64String(h.timelineSummaries),
+			"research_summaries":     u64String(h.researchSummaries),
+			"upgrade_explanations":   u64String(h.upgradeExplanations),
+			"downgrade_explanations": u64String(h.downgradeExplanations),
+			"cached_documents":       strconv.Itoa(documents),
+			"dropped":                u64String(dropped),
 		},
 	}
 }

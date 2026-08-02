@@ -4,11 +4,11 @@ import "sync"
 
 // Cache stores active recommendations, completed evaluations, and historical statistics.
 type Cache struct {
-	mu              sync.RWMutex
-	active          map[string]QualityReport
-	completed       map[string]QualityReport
-	latest          map[string]QualityReport
-	historical      aggregateHistoricalStats
+	mu         sync.RWMutex
+	active     map[string]QualityReport
+	completed  map[string]QualityReport
+	latest     map[string]QualityReport
+	historical aggregateHistoricalStats
 }
 
 // NewCache creates an empty quality cache.

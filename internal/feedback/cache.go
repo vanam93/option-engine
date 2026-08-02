@@ -4,11 +4,11 @@ import "sync"
 
 // Cache is a thread-safe in-memory feedback snapshot store.
 type Cache struct {
-	mu              sync.RWMutex
-	seen            map[string]struct{}
-	aggregator      *Aggregator
-	latest          FeedbackSnapshot
-	entries         int
+	mu         sync.RWMutex
+	seen       map[string]struct{}
+	aggregator *Aggregator
+	latest     FeedbackSnapshot
+	entries    int
 }
 
 // NewCache creates a feedback cache.

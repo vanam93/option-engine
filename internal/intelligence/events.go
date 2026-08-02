@@ -67,38 +67,38 @@ type ResearchEvidence struct {
 
 // ConfidenceBreakdown displays per-factor confidence contributions.
 type ConfidenceBreakdown struct {
-	Signal         *float64 `json:"signal_contribution,omitempty"`
-	Strategy       *float64 `json:"strategy_contribution,omitempty"`
-	Performance    *float64 `json:"performance_contribution,omitempty"`
-	Optimization   *float64 `json:"optimization_contribution,omitempty"`
-	WalkForward    *float64 `json:"walk_forward_contribution,omitempty"`
-	MonteCarlo     *float64 `json:"monte_carlo_contribution,omitempty"`
-	Validation     *float64 `json:"validation_contribution,omitempty"`
-	Overall        float64  `json:"overall_confidence"`
+	Signal       *float64 `json:"signal_contribution,omitempty"`
+	Strategy     *float64 `json:"strategy_contribution,omitempty"`
+	Performance  *float64 `json:"performance_contribution,omitempty"`
+	Optimization *float64 `json:"optimization_contribution,omitempty"`
+	WalkForward  *float64 `json:"walk_forward_contribution,omitempty"`
+	MonteCarlo   *float64 `json:"monte_carlo_contribution,omitempty"`
+	Validation   *float64 `json:"validation_contribution,omitempty"`
+	Overall      float64  `json:"overall_confidence"`
 }
 
 // IntelligenceDocument is the complete explanation for one recommendation.
 type IntelligenceDocument struct {
-	RecommendationID        string              `json:"recommendation_id"`
-	Symbol                  string              `json:"symbol"`
-	Timeframe               string              `json:"timeframe"`
-	Strategy                string              `json:"strategy"`
-	RecommendationLevel     Level               `json:"recommendation_level"`
-	Confidence              float64             `json:"confidence"`
-	CurrentStatus           Status              `json:"current_status"`
-	CurrentRecommendationState string           `json:"current_recommendation_state"`
-	ResearchSummary         string              `json:"research_summary,omitempty"`
-	DecisionSummary         string              `json:"decision_summary,omitempty"`
-	Explanation             string              `json:"explanation"`
-	SupportingFactors       []string            `json:"supporting_factors,omitempty"`
-	RiskFactors             []string            `json:"risk_factors,omitempty"`
-	TimelineSummary         string              `json:"timeline_summary,omitempty"`
-	RecommendationHistory   []TimelineEntry     `json:"recommendation_history,omitempty"`
-	ReasonForUpgrade        string              `json:"reason_for_upgrade,omitempty"`
-	ReasonForDowngrade      string              `json:"reason_for_downgrade,omitempty"`
-	ConfidenceBreakdown     ConfidenceBreakdown `json:"confidence_breakdown"`
-	ResearchEvidence        ResearchEvidence    `json:"research_evidence"`
-	GeneratedAt             time.Time           `json:"generated_at"`
+	RecommendationID           string              `json:"recommendation_id"`
+	Symbol                     string              `json:"symbol"`
+	Timeframe                  string              `json:"timeframe"`
+	Strategy                   string              `json:"strategy"`
+	RecommendationLevel        Level               `json:"recommendation_level"`
+	Confidence                 float64             `json:"confidence"`
+	CurrentStatus              Status              `json:"current_status"`
+	CurrentRecommendationState string              `json:"current_recommendation_state"`
+	ResearchSummary            string              `json:"research_summary,omitempty"`
+	DecisionSummary            string              `json:"decision_summary,omitempty"`
+	Explanation                string              `json:"explanation"`
+	SupportingFactors          []string            `json:"supporting_factors,omitempty"`
+	RiskFactors                []string            `json:"risk_factors,omitempty"`
+	TimelineSummary            string              `json:"timeline_summary,omitempty"`
+	RecommendationHistory      []TimelineEntry     `json:"recommendation_history,omitempty"`
+	ReasonForUpgrade           string              `json:"reason_for_upgrade,omitempty"`
+	ReasonForDowngrade         string              `json:"reason_for_downgrade,omitempty"`
+	ConfidenceBreakdown        ConfidenceBreakdown `json:"confidence_breakdown"`
+	ResearchEvidence           ResearchEvidence    `json:"research_evidence"`
+	GeneratedAt                time.Time           `json:"generated_at"`
 }
 
 // RecommendationIntelligenceUpdated is published on recommendation.intelligence.updated.

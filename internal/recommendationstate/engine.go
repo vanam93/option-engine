@@ -17,10 +17,10 @@ import (
 
 // Engine consumes validated.recommendation events and publishes recommendation.state.updated events.
 type Engine struct {
-	cfg   Config
-	bus   ports.EventBus
-	clk   clock.Clock
-	cache *Cache
+	cfg    Config
+	bus    ports.EventBus
+	clk    clock.Clock
+	cache  *Cache
 	health healthSnapshot
 
 	mu           sync.Mutex

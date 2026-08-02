@@ -8,12 +8,12 @@ import (
 )
 
 type healthSnapshot struct {
-	eventsProcessed           uint64
-	feedbackGenerated         uint64
-	malformedEvents           uint64
-	publishFailures           uint64
-	totalProcessingLatencyNs  uint64
-	processingSamples         uint64
+	eventsProcessed          uint64
+	feedbackGenerated        uint64
+	malformedEvents          uint64
+	publishFailures          uint64
+	totalProcessingLatencyNs uint64
+	processingSamples        uint64
 }
 
 func (h *healthSnapshot) recordProcessed(duration time.Duration) {
@@ -62,20 +62,20 @@ func (h *healthSnapshot) report(
 		Connected: connected,
 		Message:   "recommendation feedback engine",
 		Details: map[string]string{
-			"enabled":                         boolString(cfg.Enabled),
-			"events_processed":                u64String(h.eventsProcessed),
-			"feedback_generated":              u64String(h.feedbackGenerated),
-			"tracked_strategies":              strconv.Itoa(strategies),
-			"tracked_symbols":                 strconv.Itoa(symbols),
-			"tracked_timeframes":              strconv.Itoa(timeframes),
-			"tracked_recommendations":         strconv.Itoa(recommendations),
-			"confidence_buckets":              strconv.Itoa(confidenceBuckets),
-			"rolling_windows":                 strconv.Itoa(rollingWindows),
-			"cache_entries":                   strconv.Itoa(cacheEntries),
-			"average_processing_latency_ms":   floatString(h.averageProcessingLatencyMs()),
-			"malformed_events":                u64String(h.malformedEvents),
-			"publish_failures":                u64String(h.publishFailures),
-			"dropped_events":                  u64String(dropped),
+			"enabled":                       boolString(cfg.Enabled),
+			"events_processed":              u64String(h.eventsProcessed),
+			"feedback_generated":            u64String(h.feedbackGenerated),
+			"tracked_strategies":            strconv.Itoa(strategies),
+			"tracked_symbols":               strconv.Itoa(symbols),
+			"tracked_timeframes":            strconv.Itoa(timeframes),
+			"tracked_recommendations":       strconv.Itoa(recommendations),
+			"confidence_buckets":            strconv.Itoa(confidenceBuckets),
+			"rolling_windows":               strconv.Itoa(rollingWindows),
+			"cache_entries":                 strconv.Itoa(cacheEntries),
+			"average_processing_latency_ms": floatString(h.averageProcessingLatencyMs()),
+			"malformed_events":              u64String(h.malformedEvents),
+			"publish_failures":              u64String(h.publishFailures),
+			"dropped_events":                u64String(dropped),
 		},
 	}
 }

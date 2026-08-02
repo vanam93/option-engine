@@ -17,7 +17,7 @@ type fingerprintKey struct {
 type Cache struct {
 	mu sync.Mutex
 
-	cooldown time.Duration
+	cooldown   time.Duration
 	maxHistory int
 
 	seenRecommendations map[string]struct{}

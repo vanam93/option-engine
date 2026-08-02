@@ -35,14 +35,14 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, cach
 		Connected: connected,
 		Message:   "recommendation state manager",
 		Details: map[string]string{
-			"enabled":                  boolString(cfg.Enabled),
-			"active_recommendations":   intString(active),
-			"closed_recommendations":   intString(closed),
-			"timeline_entries":         intString(timelineEntries),
-			"updates_processed":        u64String(h.updatesProcessed),
-			"duplicates_merged":        u64String(h.duplicatesMerged),
-			"average_confidence":       floatString(averageConfidence),
-			"dropped":                  u64String(dropped),
+			"enabled":                boolString(cfg.Enabled),
+			"active_recommendations": intString(active),
+			"closed_recommendations": intString(closed),
+			"timeline_entries":       intString(timelineEntries),
+			"updates_processed":      u64String(h.updatesProcessed),
+			"duplicates_merged":      u64String(h.duplicatesMerged),
+			"average_confidence":     floatString(averageConfidence),
+			"dropped":                u64String(dropped),
 		},
 	}
 }

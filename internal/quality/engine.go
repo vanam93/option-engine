@@ -291,10 +291,10 @@ func (e *Engine) Health() health.Report {
 
 func parseIntelligenceInput(payload json.RawMessage) (IntelligenceInput, bool) {
 	var raw struct {
-		RecommendationID string `json:"recommendation_id"`
-		Symbol           string `json:"symbol"`
-		Timeframe        string `json:"timeframe"`
-		Strategy         string `json:"strategy"`
+		RecommendationID string    `json:"recommendation_id"`
+		Symbol           string    `json:"symbol"`
+		Timeframe        string    `json:"timeframe"`
+		Strategy         string    `json:"strategy"`
 		GeneratedAt      time.Time `json:"generated_at"`
 		Document         struct {
 			RecommendationLevel Level   `json:"recommendation_level"`
@@ -315,25 +315,25 @@ func parseIntelligenceInput(payload json.RawMessage) (IntelligenceInput, bool) {
 	}
 
 	return IntelligenceInput{
-		RecommendationID:  raw.RecommendationID,
-		Symbol:            raw.Symbol,
-		Timeframe:         raw.Timeframe,
-		Strategy:          strings.TrimSpace(raw.Strategy),
+		RecommendationID:    raw.RecommendationID,
+		Symbol:              raw.Symbol,
+		Timeframe:           raw.Timeframe,
+		Strategy:            strings.TrimSpace(raw.Strategy),
 		RecommendationLevel: raw.Document.RecommendationLevel,
-		Confidence:        raw.Document.Confidence,
-		CurrentStatus:     status,
-		GeneratedAt:       raw.GeneratedAt,
+		Confidence:          raw.Document.Confidence,
+		CurrentStatus:       status,
+		GeneratedAt:         raw.GeneratedAt,
 	}, true
 }
 
 func parseStateInput(payload json.RawMessage) (StateInput, bool) {
 	var raw struct {
-		RecommendationID string    `json:"recommendation_id"`
-		Symbol           string    `json:"symbol"`
-		Timeframe        string    `json:"timeframe"`
-		Strategy         string    `json:"strategy"`
-		CurrentStatus    Status    `json:"current_status"`
-		Confidence       float64   `json:"confidence"`
+		RecommendationID    string  `json:"recommendation_id"`
+		Symbol              string  `json:"symbol"`
+		Timeframe           string  `json:"timeframe"`
+		Strategy            string  `json:"strategy"`
+		CurrentStatus       Status  `json:"current_status"`
+		Confidence          float64 `json:"confidence"`
 		LatestTimelineEntry struct {
 			Timestamp time.Time `json:"timestamp"`
 		} `json:"latest_timeline_entry"`

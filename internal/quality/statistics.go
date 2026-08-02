@@ -53,13 +53,13 @@ func computeQualityMetrics(tracker activeTracker, at time.Time) QualityMetrics {
 
 // aggregateHistoricalStats summarizes completed reports.
 type aggregateHistoricalStats struct {
-	Count              int
-	Successful         int
-	Failed             int
-	Expired            int
-	TotalReturnPct     float64
-	TotalQualityScore  float64
-	TotalTrackingMins  float64
+	Count             int
+	Successful        int
+	Failed            int
+	Expired           int
+	TotalReturnPct    float64
+	TotalQualityScore float64
+	TotalTrackingMins float64
 }
 
 func (a *aggregateHistoricalStats) add(report QualityReport) {

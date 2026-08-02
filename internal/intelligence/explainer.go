@@ -15,8 +15,8 @@ var (
 
 // Explainer generates human-readable explanations from recommendation state.
 type Explainer struct {
-	cfg  Config
-	fmt  *Formatter
+	cfg Config
+	fmt *Formatter
 }
 
 // NewExplainer creates an explainer.

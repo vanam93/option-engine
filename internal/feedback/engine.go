@@ -212,27 +212,27 @@ func (e *Engine) Health() health.Report {
 
 func parseQualityInput(payload json.RawMessage) (QualityInput, bool) {
 	var raw struct {
-		RecommendationID string `json:"recommendation_id"`
-		Symbol           string `json:"symbol"`
-		Timeframe        string `json:"timeframe"`
-		Strategy         string `json:"strategy"`
-		Scanner          string `json:"scanner"`
+		RecommendationID string    `json:"recommendation_id"`
+		Symbol           string    `json:"symbol"`
+		Timeframe        string    `json:"timeframe"`
+		Strategy         string    `json:"strategy"`
+		Scanner          string    `json:"scanner"`
 		GeneratedAt      time.Time `json:"generated_at"`
 		Report           struct {
-			RecommendationID          string  `json:"recommendation_id"`
-			Symbol                    string  `json:"symbol"`
-			Timeframe                 string  `json:"timeframe"`
-			Strategy                  string  `json:"strategy"`
-			RecommendationLevel       Level   `json:"recommendation_level"`
-			Confidence                float64 `json:"confidence"`
-			Outcome                   Outcome `json:"outcome"`
-			QualityScore              float64 `json:"quality_score"`
-			Completed                 bool    `json:"completed"`
+			RecommendationID          string    `json:"recommendation_id"`
+			Symbol                    string    `json:"symbol"`
+			Timeframe                 string    `json:"timeframe"`
+			Strategy                  string    `json:"strategy"`
+			RecommendationLevel       Level     `json:"recommendation_level"`
+			Confidence                float64   `json:"confidence"`
+			Outcome                   Outcome   `json:"outcome"`
+			QualityScore              float64   `json:"quality_score"`
+			Completed                 bool      `json:"completed"`
 			EvaluatedAt               time.Time `json:"evaluated_at"`
-			OpportunityClassification string  `json:"opportunity_classification"`
-			RiskApproval              string  `json:"risk_approval"`
-			MarketRegime              string  `json:"market_regime"`
-			RecommendationSource      string  `json:"recommendation_source"`
+			OpportunityClassification string    `json:"opportunity_classification"`
+			RiskApproval              string    `json:"risk_approval"`
+			MarketRegime              string    `json:"market_regime"`
+			RecommendationSource      string    `json:"recommendation_source"`
 			QualityMetrics            struct {
 				MFE             float64 `json:"mfe"`
 				MAE             float64 `json:"mae"`
@@ -274,24 +274,24 @@ func parseQualityInput(payload json.RawMessage) (QualityInput, bool) {
 
 	return QualityInput{
 		RecommendationID:          recID,
-		Symbol:                      symbol,
-		Timeframe:                   timeframe,
-		Strategy:                    strategy,
-		Scanner:                     strings.TrimSpace(raw.Scanner),
-		RecommendationLevel:         raw.Report.RecommendationLevel,
-		Confidence:                  raw.Report.Confidence,
-		OpportunityClassification:   strings.TrimSpace(raw.Report.OpportunityClassification),
-		RiskApproval:                strings.TrimSpace(raw.Report.RiskApproval),
-		MarketRegime:                strings.TrimSpace(raw.Report.MarketRegime),
-		RecommendationSource:        strings.TrimSpace(raw.Report.RecommendationSource),
-		Outcome:                     raw.Report.Outcome,
-		QualityScore:                raw.Report.QualityScore,
-		ReturnPct:                   raw.Report.QualityMetrics.ReturnPct,
-		MFE:                         raw.Report.QualityMetrics.MFE,
-		MAE:                         raw.Report.QualityMetrics.MAE,
-		MaxDrawdown:                 raw.Report.QualityMetrics.MaximumDrawdown,
-		HoldingDurationMs:           raw.Report.QualityMetrics.HoldingDuration,
-		Completed:                   raw.Report.Completed,
-		EvaluatedAt:                 evaluatedAt,
+		Symbol:                    symbol,
+		Timeframe:                 timeframe,
+		Strategy:                  strategy,
+		Scanner:                   strings.TrimSpace(raw.Scanner),
+		RecommendationLevel:       raw.Report.RecommendationLevel,
+		Confidence:                raw.Report.Confidence,
+		OpportunityClassification: strings.TrimSpace(raw.Report.OpportunityClassification),
+		RiskApproval:              strings.TrimSpace(raw.Report.RiskApproval),
+		MarketRegime:              strings.TrimSpace(raw.Report.MarketRegime),
+		RecommendationSource:      strings.TrimSpace(raw.Report.RecommendationSource),
+		Outcome:                   raw.Report.Outcome,
+		QualityScore:              raw.Report.QualityScore,
+		ReturnPct:                 raw.Report.QualityMetrics.ReturnPct,
+		MFE:                       raw.Report.QualityMetrics.MFE,
+		MAE:                       raw.Report.QualityMetrics.MAE,
+		MaxDrawdown:               raw.Report.QualityMetrics.MaximumDrawdown,
+		HoldingDurationMs:         raw.Report.QualityMetrics.HoldingDuration,
+		Completed:                 raw.Report.Completed,
+		EvaluatedAt:               evaluatedAt,
 	}, true
 }

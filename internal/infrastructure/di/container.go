@@ -7,20 +7,22 @@ import (
 	"time"
 
 	"github.com/vanam-gangireddy/option-engine/internal/adapters/http"
-	"github.com/vanam-gangireddy/option-engine/internal/alerts"
 	"github.com/vanam-gangireddy/option-engine/internal/adapters/ws"
+	"github.com/vanam-gangireddy/option-engine/internal/alerts"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/candle"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/performance"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/risk"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/signal"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/strategy"
+	"github.com/vanam-gangireddy/option-engine/internal/api"
 	"github.com/vanam-gangireddy/option-engine/internal/application/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/backtest"
 	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/core/metrics"
+	"github.com/vanam-gangireddy/option-engine/internal/delivery"
 	"github.com/vanam-gangireddy/option-engine/internal/execution"
 	"github.com/vanam-gangireddy/option-engine/internal/execution/paper"
 	"github.com/vanam-gangireddy/option-engine/internal/experiments"
@@ -28,6 +30,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/postgres"
+	"github.com/vanam-gangireddy/option-engine/internal/intelligence"
 	"github.com/vanam-gangireddy/option-engine/internal/market/cache"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 	"github.com/vanam-gangireddy/option-engine/internal/market/gateway"
@@ -41,8 +44,6 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/optimization"
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
-	"github.com/vanam-gangireddy/option-engine/internal/api"
-	"github.com/vanam-gangireddy/option-engine/internal/intelligence"
 	"github.com/vanam-gangireddy/option-engine/internal/quality"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendation"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendationstate"
@@ -54,49 +55,50 @@ import (
 
 // Container holds all wired dependencies.
 type Container struct {
-	Config               *config.Config
-	Logger               *slog.Logger
-	Clock                clock.Clock
-	Calendar             *calendar.Calendar
-	Metrics              metrics.Registry
-	SymbolRegistry       *symbolregistry.Registry
-	ProviderRegistry     *providers.Registry
-	ProviderManager      *providers.Manager
-	Cache                *cache.Cache
-	EventBus             *eventbus.Bus
-	Gateway              *gateway.Engine
-	Normalizer           *normalizer.Normalizer
-	Validator            *validator.Validator
-	Snapshot             func(time.Time) snapshot.Market
-	Subscription         *subscription.Manager
-	CandleEngine         *candle.Engine
-	IndicatorEngine      *indicator.Engine
-	SignalEngine         *signal.Engine
-	StrategyEngine       *strategy.Engine
-	RiskEngine           *risk.Engine
-	ExecutionAdapter     execution.ExecutionAdapter
-	PaperEngine          *paper.Engine
-	PortfolioEngine      *portfolio.Engine
-	PerformanceEngine    *performance.Engine
-	OptimizationEngine   *optimization.Engine
-	ExperimentEngine     *experiments.Engine
-	WalkForwardEngine    *walkforward.Engine
-	MonteCarloEngine     *montecarlo.Engine
-	ResearchEngine       *research.Engine
-	ScannerEngine        *scanner.Engine
-	OpportunityEngine    *opportunity.Engine
-	RecommendationEngine     *recommendation.Engine
-	ValidationEngine         *intelvalidation.Engine
+	Config                    *config.Config
+	Logger                    *slog.Logger
+	Clock                     clock.Clock
+	Calendar                  *calendar.Calendar
+	Metrics                   metrics.Registry
+	SymbolRegistry            *symbolregistry.Registry
+	ProviderRegistry          *providers.Registry
+	ProviderManager           *providers.Manager
+	Cache                     *cache.Cache
+	EventBus                  *eventbus.Bus
+	Gateway                   *gateway.Engine
+	Normalizer                *normalizer.Normalizer
+	Validator                 *validator.Validator
+	Snapshot                  func(time.Time) snapshot.Market
+	Subscription              *subscription.Manager
+	CandleEngine              *candle.Engine
+	IndicatorEngine           *indicator.Engine
+	SignalEngine              *signal.Engine
+	StrategyEngine            *strategy.Engine
+	RiskEngine                *risk.Engine
+	ExecutionAdapter          execution.ExecutionAdapter
+	PaperEngine               *paper.Engine
+	PortfolioEngine           *portfolio.Engine
+	PerformanceEngine         *performance.Engine
+	OptimizationEngine        *optimization.Engine
+	ExperimentEngine          *experiments.Engine
+	WalkForwardEngine         *walkforward.Engine
+	MonteCarloEngine          *montecarlo.Engine
+	ResearchEngine            *research.Engine
+	ScannerEngine             *scanner.Engine
+	OpportunityEngine         *opportunity.Engine
+	RecommendationEngine      *recommendation.Engine
+	ValidationEngine          *intelvalidation.Engine
 	RecommendationStateEngine *recommendationstate.Engine
 	AlertEngine               *alerts.Engine
 	ExplanationEngine         *intelligence.Engine
 	QualityEngine             *quality.Engine
 	FeedbackEngine            *feedback.Engine
+	DeliveryEngine            *delivery.Engine
 	IntelligenceAPI           *api.Server
 	BacktestEngine            *backtest.Engine
-	Postgres             *postgres.Pool
-	HTTPServer           *http.Server
-	WSServer             *ws.Hub
+	Postgres                  *postgres.Pool
+	HTTPServer                *http.Server
+	WSServer                  *ws.Hub
 }
 
 // NewContainer wires all application dependencies.
@@ -410,6 +412,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("feedback engine: %w", err)
 	}
 
+	deliveryCfg, err := config.BuildDeliveryEngineConfig(cfg.DeliveryEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("delivery config: %w", err)
+	}
+	deliveryEngine, err := delivery.New(deliveryCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("delivery engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -439,6 +450,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, explanationEngine)
 	healthReporters = append(healthReporters, qualityEngine)
 	healthReporters = append(healthReporters, feedbackEngine)
+	healthReporters = append(healthReporters, deliveryEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -478,49 +490,50 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	intelligenceAPI.Register(httpServer.Engine())
 
 	return &Container{
-		Config:               cfg,
-		Logger:               log,
-		Clock:                clk,
-		Calendar:             cal,
-		Metrics:              metricReg,
-		SymbolRegistry:       symbols,
-		ProviderRegistry:     providerReg,
-		ProviderManager:      manager,
-		Cache:                cacheStore,
-		EventBus:             bus,
-		Gateway:              gatewayEngine,
-		Normalizer:           normalizerSvc,
-		Validator:            validatorSvc,
-		Snapshot:             snapshotBuilder,
-		Subscription:         subManager,
-		CandleEngine:         candleEngine,
-		IndicatorEngine:      indicatorEngine,
-		SignalEngine:         signalEngine,
-		StrategyEngine:       strategyEngine,
-		RiskEngine:           riskEngine,
-		ExecutionAdapter:     executionAdapter,
-		PaperEngine:          paperEngine,
-		PortfolioEngine:      portfolioEngine,
-		PerformanceEngine:    performanceEngine,
-		OptimizationEngine:   optimizationEngine,
-		ExperimentEngine:     experimentEngine,
-		WalkForwardEngine:    walkForwardEngine,
-		MonteCarloEngine:     monteCarloEngine,
-		ResearchEngine:       researchEngine,
-		ScannerEngine:        scannerEngine,
-		OpportunityEngine:    opportunityEngine,
-		RecommendationEngine: recommendationEngine,
+		Config:                    cfg,
+		Logger:                    log,
+		Clock:                     clk,
+		Calendar:                  cal,
+		Metrics:                   metricReg,
+		SymbolRegistry:            symbols,
+		ProviderRegistry:          providerReg,
+		ProviderManager:           manager,
+		Cache:                     cacheStore,
+		EventBus:                  bus,
+		Gateway:                   gatewayEngine,
+		Normalizer:                normalizerSvc,
+		Validator:                 validatorSvc,
+		Snapshot:                  snapshotBuilder,
+		Subscription:              subManager,
+		CandleEngine:              candleEngine,
+		IndicatorEngine:           indicatorEngine,
+		SignalEngine:              signalEngine,
+		StrategyEngine:            strategyEngine,
+		RiskEngine:                riskEngine,
+		ExecutionAdapter:          executionAdapter,
+		PaperEngine:               paperEngine,
+		PortfolioEngine:           portfolioEngine,
+		PerformanceEngine:         performanceEngine,
+		OptimizationEngine:        optimizationEngine,
+		ExperimentEngine:          experimentEngine,
+		WalkForwardEngine:         walkForwardEngine,
+		MonteCarloEngine:          monteCarloEngine,
+		ResearchEngine:            researchEngine,
+		ScannerEngine:             scannerEngine,
+		OpportunityEngine:         opportunityEngine,
+		RecommendationEngine:      recommendationEngine,
 		ValidationEngine:          validationEngine,
 		RecommendationStateEngine: recommendationStateEngine,
 		AlertEngine:               alertEngine,
 		ExplanationEngine:         explanationEngine,
 		QualityEngine:             qualityEngine,
 		FeedbackEngine:            feedbackEngine,
+		DeliveryEngine:            deliveryEngine,
 		IntelligenceAPI:           intelligenceAPI,
 		BacktestEngine:            backtestEngine,
-		Postgres:             pool,
-		HTTPServer:           httpServer,
-		WSServer:             wsHub,
+		Postgres:                  pool,
+		HTTPServer:                httpServer,
+		WSServer:                  wsHub,
 	}, nil
 }
 
@@ -566,6 +579,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 	}
 	if c.FeedbackEngine != nil {
 		if err := c.FeedbackEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.DeliveryEngine != nil {
+		if err := c.DeliveryEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -730,6 +748,9 @@ func (c *Container) Close() {
 	}
 	if c.FeedbackEngine != nil {
 		_ = c.FeedbackEngine.Close()
+	}
+	if c.DeliveryEngine != nil {
+		_ = c.DeliveryEngine.Close()
 	}
 	if c.RecommendationStateEngine != nil {
 		_ = c.RecommendationStateEngine.Close()

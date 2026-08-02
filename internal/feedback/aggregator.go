@@ -8,11 +8,11 @@ import (
 )
 
 type bucketDef struct {
-	label      string
-	lower      float64
-	upper      float64
-	threshold  float64
-	isBelow    bool
+	label     string
+	lower     float64
+	upper     float64
+	threshold float64
+	isBelow   bool
 }
 
 // Aggregator maintains dimensional learning statistics.

@@ -7,9 +7,9 @@ import (
 
 // Config controls the recommendation feedback engine.
 type Config struct {
-	Enabled          bool
-	SubscriberBuffer int
-	RollingWindows   []int
+	Enabled           bool
+	SubscriberBuffer  int
+	RollingWindows    []int
 	ConfidenceBuckets []float64
 }
 

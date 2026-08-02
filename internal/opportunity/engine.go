@@ -251,8 +251,8 @@ func (e *Engine) publish(item RankedOpportunity, at time.Time) {
 // OpportunitySnapshot is an immutable read model of ranked opportunities.
 type OpportunitySnapshot struct {
 	Ranked   []RankedOpportunity `json:"ranked"`
-	Platform PlatformState     `json:"platform"`
-	Summary  Summary           `json:"summary"`
+	Platform PlatformState       `json:"platform"`
+	Summary  Summary             `json:"summary"`
 }
 
 // Snapshot returns the current ranked opportunity state.

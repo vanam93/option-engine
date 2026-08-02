@@ -51,13 +51,13 @@ const (
 // IntelligenceInput mirrors recommendation.intelligence.updated payload fields used by the engine.
 type IntelligenceInput struct {
 	RecommendationID    string
-	Symbol                string
-	Timeframe             string
-	Strategy              string
-	RecommendationLevel   Level
-	Confidence            float64
-	CurrentStatus         Status
-	GeneratedAt           time.Time
+	Symbol              string
+	Timeframe           string
+	Strategy            string
+	RecommendationLevel Level
+	Confidence          float64
+	CurrentStatus       Status
+	GeneratedAt         time.Time
 }
 
 // StateInput mirrors recommendation.state.updated payload fields used by the engine.
@@ -85,33 +85,33 @@ type PriceStatistics struct {
 
 // QualityMetrics holds excursion and drawdown metrics.
 type QualityMetrics struct {
-	MFE              float64 `json:"mfe"`
-	MAE              float64 `json:"mae"`
-	MaximumReturn    float64 `json:"maximum_return"`
-	MaximumDrawdown  float64 `json:"maximum_drawdown"`
-	ReturnPct        float64 `json:"return_pct"`
-	HoldingDuration  int64   `json:"holding_duration_ms"`
+	MFE             float64 `json:"mfe"`
+	MAE             float64 `json:"mae"`
+	MaximumReturn   float64 `json:"maximum_return"`
+	MaximumDrawdown float64 `json:"maximum_drawdown"`
+	ReturnPct       float64 `json:"return_pct"`
+	HoldingDuration int64   `json:"holding_duration_ms"`
 }
 
 // QualityReport is the complete evaluation for one recommendation.
 type QualityReport struct {
-	RecommendationID    string         `json:"recommendation_id"`
-	Symbol              string         `json:"symbol"`
-	Timeframe           string         `json:"timeframe"`
-	Strategy            string         `json:"strategy"`
-	RecommendationLevel Level          `json:"recommendation_level"`
-	Confidence          float64        `json:"confidence"`
-	EntryTime           time.Time      `json:"entry_time"`
-	ExitTime            *time.Time     `json:"exit_time,omitempty"`
-	CurrentStatus       Status         `json:"current_status"`
-	Outcome             Outcome        `json:"outcome"`
-	Classification      Classification `json:"classification"`
-	QualityScore        float64        `json:"quality_score"`
+	RecommendationID    string          `json:"recommendation_id"`
+	Symbol              string          `json:"symbol"`
+	Timeframe           string          `json:"timeframe"`
+	Strategy            string          `json:"strategy"`
+	RecommendationLevel Level           `json:"recommendation_level"`
+	Confidence          float64         `json:"confidence"`
+	EntryTime           time.Time       `json:"entry_time"`
+	ExitTime            *time.Time      `json:"exit_time,omitempty"`
+	CurrentStatus       Status          `json:"current_status"`
+	Outcome             Outcome         `json:"outcome"`
+	Classification      Classification  `json:"classification"`
+	QualityScore        float64         `json:"quality_score"`
 	PriceStatistics     PriceStatistics `json:"price_statistics"`
 	QualityMetrics      QualityMetrics  `json:"quality_metrics"`
-	TrackingActive      bool           `json:"tracking_active"`
-	Completed           bool           `json:"completed"`
-	EvaluatedAt         time.Time      `json:"evaluated_at"`
+	TrackingActive      bool            `json:"tracking_active"`
+	Completed           bool            `json:"completed"`
+	EvaluatedAt         time.Time       `json:"evaluated_at"`
 }
 
 // RecommendationQualityUpdated is published on recommendation.quality.updated.

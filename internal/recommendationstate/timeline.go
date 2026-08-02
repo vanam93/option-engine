@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	timelineCreated           = "Recommendation Created"
+	timelineCreated             = "Recommendation Created"
 	timelineConfidenceIncreased = "Confidence Increased"
 	timelineConfidenceDecreased = "Confidence Decreased"
-	timelineStatusChanged     = "Status Changed"
-	timelineExitRecommended   = "Exit Recommended"
-	timelineClosed            = "Closed"
+	timelineStatusChanged       = "Status Changed"
+	timelineExitRecommended     = "Exit Recommended"
+	timelineClosed              = "Closed"
 )
 
 // applyUpdate mutates state from a validated recommendation and returns the latest timeline entry.
