@@ -36,6 +36,7 @@ type Config struct {
 	Scanner      ScannerConfig      `mapstructure:"scanner"`
 	Intelligence IntelligenceConfig `mapstructure:"intelligence"`
 	Console      ConsoleConfig      `mapstructure:"console"`
+	BacktestRunner BacktestRunnerConfig `mapstructure:"backtest_runner"`
 	API          APIConfig          `mapstructure:"api"`
 }
 
@@ -489,6 +490,10 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("console.enabled", true)
 	v.SetDefault("console.refresh_interval", "1s")
+
+	v.SetDefault("backtest_runner.enabled", true)
+	v.SetDefault("backtest_runner.auto_start", false)
+	v.SetDefault("backtest_runner.concurrent_sessions", 1)
 
 	v.SetDefault("api.enabled", true)
 	v.SetDefault("api.prefix", "/api/v1")

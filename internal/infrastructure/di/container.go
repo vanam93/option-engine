@@ -18,6 +18,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/api"
 	"github.com/vanam-gangireddy/option-engine/internal/application/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/backtest"
+	"github.com/vanam-gangireddy/option-engine/internal/backtestrunner"
 	"github.com/vanam-gangireddy/option-engine/internal/console"
 	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
@@ -96,6 +97,7 @@ type Container struct {
 	FeedbackEngine            *feedback.Engine
 	DeliveryEngine            *delivery.Engine
 	ConsoleEngine             *console.Engine
+	BacktestRunnerEngine      *backtestrunner.Engine
 	IntelligenceAPI           *api.Server
 	BacktestEngine            *backtest.Engine
 	Postgres                  *postgres.Pool
@@ -432,6 +434,41 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("console engine: %w", err)
 	}
 
+	backtestRunnerCfg, err := config.BuildBacktestRunnerEngineConfig(cfg.BacktestRunnerEngineSettings(), cfg.EventBus.SubscriberBuffer)
+	if err != nil {
+		return nil, fmt.Errorf("backtest runner config: %w", err)
+	}
+	backtestFactory := func(req backtestrunner.SessionRequest) (*backtest.Engine, error) {
+		if backtestEngine != nil {
+			return backtestEngine, nil
+		}
+		sessionCfg := backtestSettings
+		sessionCfg.Enabled = true
+		sessionCfg.Symbols = append([]string(nil), req.Symbols...)
+		sessionCfg.StartTime = req.StartTime
+		sessionCfg.EndTime = req.EndTime
+		if req.Timeframe != "" {
+			sessionCfg.Timeframe = req.Timeframe
+		}
+		if req.Speed > 0 {
+			sessionCfg.Speed = req.Speed
+		}
+		if req.DataPath != "" {
+			sessionCfg.DataPath = req.DataPath
+		}
+		return backtest.New(sessionCfg, clk)
+	}
+	replayRunner := backtestrunner.NewReplayRunner(backtestFactory, &backtestrunner.ManagerBinder{Manager: manager})
+	backtestRunnerEngine, err := backtestrunner.New(backtestRunnerCfg, bus, clk, replayRunner, deliveryEngine.Repository())
+	if err != nil {
+		return nil, fmt.Errorf("backtest runner engine: %w", err)
+	}
+	if backtestRunnerCfg.AutoStart {
+		if defaultReq, reqErr := cfg.DefaultBacktestSessionRequest(); reqErr == nil {
+			backtestRunnerEngine.SetDefaultRequest(defaultReq)
+		}
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -463,6 +500,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, feedbackEngine)
 	healthReporters = append(healthReporters, deliveryEngine)
 	healthReporters = append(healthReporters, consoleEngine)
+	healthReporters = append(healthReporters, backtestRunnerEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -542,6 +580,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		FeedbackEngine:            feedbackEngine,
 		DeliveryEngine:            deliveryEngine,
 		ConsoleEngine:             consoleEngine,
+		BacktestRunnerEngine:      backtestRunnerEngine,
 		IntelligenceAPI:           intelligenceAPI,
 		BacktestEngine:            backtestEngine,
 		Postgres:                  pool,
@@ -602,6 +641,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 	}
 	if c.ConsoleEngine != nil {
 		if err := c.ConsoleEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.BacktestRunnerEngine != nil {
+		if err := c.BacktestRunnerEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -772,6 +816,9 @@ func (c *Container) Close() {
 	}
 	if c.ConsoleEngine != nil {
 		_ = c.ConsoleEngine.Close()
+	}
+	if c.BacktestRunnerEngine != nil {
+		_ = c.BacktestRunnerEngine.Close()
 	}
 	if c.RecommendationStateEngine != nil {
 		_ = c.RecommendationStateEngine.Close()

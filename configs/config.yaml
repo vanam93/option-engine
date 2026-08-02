@@ -276,6 +276,11 @@ console:
   enabled: true
   refresh_interval: 1s
 
+backtest_runner:
+  enabled: true
+  auto_start: false
+  concurrent_sessions: 1
+
 api:
   enabled: true
   prefix: /api/v1
