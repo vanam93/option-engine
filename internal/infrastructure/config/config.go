@@ -35,6 +35,7 @@ type Config struct {
 	Research     ResearchConfig     `mapstructure:"research"`
 	Scanner      ScannerConfig      `mapstructure:"scanner"`
 	Intelligence IntelligenceConfig `mapstructure:"intelligence"`
+	Console      ConsoleConfig      `mapstructure:"console"`
 	API          APIConfig          `mapstructure:"api"`
 }
 
@@ -482,6 +483,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("intelligence.feedback.subscriber_buffer", 256)
 	v.SetDefault("intelligence.feedback.rolling_windows", []int{25, 50, 100, 250})
 	v.SetDefault("intelligence.feedback.confidence_buckets", []float64{0.60, 0.70, 0.80, 0.90, 0.95})
+
+	v.SetDefault("intelligence.delivery.enabled", true)
+	v.SetDefault("intelligence.delivery.subscriber_buffer", 512)
+
+	v.SetDefault("console.enabled", true)
+	v.SetDefault("console.refresh_interval", "1s")
 
 	v.SetDefault("api.enabled", true)
 	v.SetDefault("api.prefix", "/api/v1")

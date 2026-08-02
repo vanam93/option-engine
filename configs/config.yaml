@@ -272,6 +272,10 @@ intelligence:
     enabled: true
     subscriber_buffer: 512
 
+console:
+  enabled: true
+  refresh_interval: 1s
+
 api:
   enabled: true
   prefix: /api/v1
