@@ -11,6 +11,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	"github.com/vanam-gangireddy/option-engine/internal/execution"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 )
 
@@ -121,11 +122,14 @@ func (e *Engine) handle(evt events.Event) {
 	if intent.Status != intentApproved {
 		return
 	}
-	report := e.executor.Execute(intent, e.cache)
+	report, err := e.Execute(e.ctx, intent)
+	if err != nil {
+		return
+	}
 	e.publish(report)
 }
 
-func parseInputIntent(payload json.RawMessage) (InputIntent, bool) {
+func parseInputIntent(payload json.RawMessage) (execution.ApprovedTradeIntent, bool) {
 	var raw struct {
 		ID             uuid.UUID `json:"id"`
 		Symbol         string    `json:"symbol"`
@@ -138,12 +142,12 @@ func parseInputIntent(payload json.RawMessage) (InputIntent, bool) {
 		Timestamp      time.Time `json:"timestamp"`
 	}
 	if err := json.Unmarshal(payload, &raw); err != nil {
-		return InputIntent{}, false
+		return execution.ApprovedTradeIntent{}, false
 	}
 	if raw.Symbol == "" || raw.Timeframe == "" || raw.Action == "" {
-		return InputIntent{}, false
+		return execution.ApprovedTradeIntent{}, false
 	}
-	return InputIntent{
+	return execution.ApprovedTradeIntent{
 		ID:             raw.ID,
 		Symbol:         raw.Symbol,
 		Timeframe:      raw.Timeframe,

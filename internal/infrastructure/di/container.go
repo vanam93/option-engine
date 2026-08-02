@@ -20,6 +20,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/core/metrics"
+	"github.com/vanam-gangireddy/option-engine/internal/execution"
 	"github.com/vanam-gangireddy/option-engine/internal/execution/paper"
 	"github.com/vanam-gangireddy/option-engine/internal/experiments"
 	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
@@ -63,6 +64,7 @@ type Container struct {
 	SignalEngine       *signal.Engine
 	StrategyEngine     *strategy.Engine
 	RiskEngine         *risk.Engine
+	ExecutionAdapter   execution.ExecutionAdapter
 	PaperEngine        *paper.Engine
 	PortfolioEngine    *portfolio.Engine
 	PerformanceEngine  *performance.Engine
@@ -228,6 +230,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	if err != nil {
 		return nil, fmt.Errorf("paper execution engine: %w", err)
 	}
+	var executionAdapter execution.ExecutionAdapter = paperEngine
 
 	portfolioCfg, err := config.BuildPortfolioEngineConfig(cfg.PortfolioEngineSettings())
 	if err != nil {
@@ -318,7 +321,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, signalEngine)
 	healthReporters = append(healthReporters, strategyEngine)
 	healthReporters = append(healthReporters, riskEngine)
-	healthReporters = append(healthReporters, paperEngine)
+	healthReporters = append(healthReporters, executionAdapter)
 	healthReporters = append(healthReporters, portfolioEngine)
 	healthReporters = append(healthReporters, performanceEngine)
 	healthReporters = append(healthReporters, optimizationEngine)
@@ -357,6 +360,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		SignalEngine:       signalEngine,
 		StrategyEngine:     strategyEngine,
 		RiskEngine:         riskEngine,
+		ExecutionAdapter:   executionAdapter,
 		PaperEngine:        paperEngine,
 		PortfolioEngine:    portfolioEngine,
 		PerformanceEngine:  performanceEngine,
@@ -432,8 +436,8 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			return err
 		}
 	}
-	if c.PaperEngine != nil {
-		if err := c.PaperEngine.Start(ctx); err != nil {
+	if c.ExecutionAdapter != nil {
+		if err := c.ExecutionAdapter.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -486,8 +490,8 @@ func (c *Container) Close() {
 	if c.RiskEngine != nil {
 		_ = c.RiskEngine.Close()
 	}
-	if c.PaperEngine != nil {
-		_ = c.PaperEngine.Close()
+	if c.ExecutionAdapter != nil {
+		_ = c.ExecutionAdapter.Stop(ctx)
 	}
 	if c.PortfolioEngine != nil {
 		_ = c.PortfolioEngine.Close()
