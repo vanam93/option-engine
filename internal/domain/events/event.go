@@ -21,6 +21,7 @@ const (
 	ApprovedTradeIntent      Type = "approved.trade.intent"
 	ExecutionReport          Type = "execution.report"
 	PortfolioUpdated         Type = "portfolio.updated"
+	PerformanceUpdated       Type = "performance.updated"
 	ContextEvaluated         Type = "context.evaluated"
 	StrategySignalGenerated  Type = "strategy.signal.generated"
 	DecisionMade             Type = "decision.made"

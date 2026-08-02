@@ -117,7 +117,8 @@ type AnalyticsConfig struct {
 	Indicator IndicatorAnalyticsConfig `mapstructure:"indicator"`
 	Signal    SignalAnalyticsConfig    `mapstructure:"signal"`
 	Strategy  StrategyAnalyticsConfig  `mapstructure:"strategy"`
-	Risk      RiskAnalyticsConfig      `mapstructure:"risk"`
+	Risk        RiskAnalyticsConfig        `mapstructure:"risk"`
+	Performance PerformanceAnalyticsConfig `mapstructure:"performance"`
 }
 
 // SignalAnalyticsConfig controls the signal evaluation engine.
@@ -206,6 +207,12 @@ type RiskAnalyticsConfig struct {
 	MaxPositions     int     `mapstructure:"max_positions"`
 	MaxTradesPerDay  int     `mapstructure:"max_trades_per_day"`
 	DefaultQuantity  int     `mapstructure:"default_quantity"`
+}
+
+// PerformanceAnalyticsConfig controls the performance analytics engine.
+type PerformanceAnalyticsConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	SubscriberBuffer int  `mapstructure:"subscriber_buffer"`
 }
 
 // IndicatorAnalyticsConfig controls the indicator computation engine.
@@ -354,6 +361,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.risk.max_positions", 5)
 	v.SetDefault("analytics.risk.max_trades_per_day", 20)
 	v.SetDefault("analytics.risk.default_quantity", 1)
+
+	v.SetDefault("analytics.performance.enabled", true)
+	v.SetDefault("analytics.performance.subscriber_buffer", 256)
 
 	v.SetDefault("execution.paper.enabled", true)
 	v.SetDefault("execution.paper.subscriber_buffer", 256)
@@ -540,6 +550,20 @@ func (c *Config) PortfolioEngineSettings() PortfolioEngineConfig {
 	return PortfolioEngineConfig{
 		Enabled:          c.Portfolio.Enabled,
 		SubscriberBuffer: c.Portfolio.SubscriberBuffer,
+	}
+}
+
+// PerformanceEngineConfig is the validated performance analytics configuration used by DI wiring.
+type PerformanceEngineConfig struct {
+	Enabled          bool
+	SubscriberBuffer int
+}
+
+// PerformanceEngineSettings maps analytics performance settings.
+func (c *Config) PerformanceEngineSettings() PerformanceEngineConfig {
+	return PerformanceEngineConfig{
+		Enabled:          c.Analytics.Performance.Enabled,
+		SubscriberBuffer: c.Analytics.Performance.SubscriberBuffer,
 	}
 }
 

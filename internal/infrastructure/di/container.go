@@ -10,6 +10,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/adapters/ws"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/candle"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator"
+	"github.com/vanam-gangireddy/option-engine/internal/analytics/performance"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/risk"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/signal"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/strategy"
@@ -56,9 +57,10 @@ type Container struct {
 	SignalEngine      *signal.Engine
 	StrategyEngine    *strategy.Engine
 	RiskEngine        *risk.Engine
-	PaperEngine       *paper.Engine
-	PortfolioEngine   *portfolio.Engine
-	Postgres          *postgres.Pool
+	PaperEngine         *paper.Engine
+	PortfolioEngine     *portfolio.Engine
+	PerformanceEngine   *performance.Engine
+	Postgres            *postgres.Pool
 	HTTPServer       *http.Server
 	WSServer         *ws.Hub
 }
@@ -201,6 +203,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("portfolio engine: %w", err)
 	}
 
+	performanceCfg, err := config.BuildPerformanceEngineConfig(cfg.PerformanceEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("performance config: %w", err)
+	}
+	performanceEngine, err := performance.New(performanceCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("performance engine: %w", err)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -220,6 +231,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, riskEngine)
 	healthReporters = append(healthReporters, paperEngine)
 	healthReporters = append(healthReporters, portfolioEngine)
+	healthReporters = append(healthReporters, performanceEngine)
 	healthReporters = append(healthReporters, &postgresHealthAdapter{pool: pool})
 
 	moduleLog := logger.WithModule(log, "bootstrap")
@@ -248,9 +260,10 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		SignalEngine:      signalEngine,
 		StrategyEngine:    strategyEngine,
 		RiskEngine:        riskEngine,
-		PaperEngine:       paperEngine,
-		PortfolioEngine:   portfolioEngine,
-		Postgres:          pool,
+		PaperEngine:         paperEngine,
+		PortfolioEngine:     portfolioEngine,
+		PerformanceEngine:   performanceEngine,
+		Postgres:            pool,
 		HTTPServer:       httpServer,
 		WSServer:         wsHub,
 	}, nil
@@ -273,6 +286,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			symbols = append(symbols, inst.Symbol)
 		}
 		if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
+			return err
+		}
+	}
+	if c.PerformanceEngine != nil {
+		if err := c.PerformanceEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -340,6 +358,9 @@ func (c *Container) Close() {
 	}
 	if c.PortfolioEngine != nil {
 		_ = c.PortfolioEngine.Close()
+	}
+	if c.PerformanceEngine != nil {
+		_ = c.PerformanceEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()
