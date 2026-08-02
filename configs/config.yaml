@@ -128,3 +128,9 @@ analytics:
       enabled: true
     breakout:
       enabled: false
+
+  risk:
+    enabled: true
+    min_confidence: 0.70
+    max_positions: 5
+    max_trades_per_day: 20

@@ -115,6 +115,7 @@ type AnalyticsConfig struct {
 	Indicator IndicatorAnalyticsConfig `mapstructure:"indicator"`
 	Signal    SignalAnalyticsConfig    `mapstructure:"signal"`
 	Strategy  StrategyAnalyticsConfig  `mapstructure:"strategy"`
+	Risk      RiskAnalyticsConfig      `mapstructure:"risk"`
 }
 
 // SignalAnalyticsConfig controls the signal evaluation engine.
@@ -174,6 +175,16 @@ type MeanReversionAnalyticsConfig struct {
 // BreakoutAnalyticsConfig enables the breakout strategy placeholder.
 type BreakoutAnalyticsConfig struct {
 	Enabled bool `mapstructure:"enabled"`
+}
+
+// RiskAnalyticsConfig controls the decision and risk engine.
+type RiskAnalyticsConfig struct {
+	Enabled          bool    `mapstructure:"enabled"`
+	SubscriberBuffer int     `mapstructure:"subscriber_buffer"`
+	MinConfidence    float64 `mapstructure:"min_confidence"`
+	MaxPositions     int     `mapstructure:"max_positions"`
+	MaxTradesPerDay  int     `mapstructure:"max_trades_per_day"`
+	DefaultQuantity  int     `mapstructure:"default_quantity"`
 }
 
 // IndicatorAnalyticsConfig controls the indicator computation engine.
@@ -315,6 +326,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.strategy.trend_following.enabled", true)
 	v.SetDefault("analytics.strategy.mean_reversion.enabled", true)
 	v.SetDefault("analytics.strategy.breakout.enabled", false)
+
+	v.SetDefault("analytics.risk.enabled", true)
+	v.SetDefault("analytics.risk.subscriber_buffer", 256)
+	v.SetDefault("analytics.risk.min_confidence", 0.70)
+	v.SetDefault("analytics.risk.max_positions", 5)
+	v.SetDefault("analytics.risk.max_trades_per_day", 20)
+	v.SetDefault("analytics.risk.default_quantity", 1)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -437,6 +455,30 @@ func (c *Config) StrategyEngineSettings() StrategyEngineConfig {
 		TrendFollowing:   c.Analytics.Strategy.TrendFollowing,
 		MeanReversion:    c.Analytics.Strategy.MeanReversion,
 		Breakout:         c.Analytics.Strategy.Breakout,
+	}
+}
+
+// RiskEngineConfig is the validated risk configuration used by DI wiring.
+type RiskEngineConfig struct {
+	Enabled          bool
+	SubscriberBuffer int
+	MinConfidence    float64
+	MaxPositions     int
+	MaxTradesPerDay  int
+	DefaultQuantity  int
+	DayResetTimezone string
+}
+
+// RiskEngineSettings maps analytics risk settings.
+func (c *Config) RiskEngineSettings() RiskEngineConfig {
+	return RiskEngineConfig{
+		Enabled:          c.Analytics.Risk.Enabled,
+		SubscriberBuffer: c.Analytics.Risk.SubscriberBuffer,
+		MinConfidence:    c.Analytics.Risk.MinConfidence,
+		MaxPositions:     c.Analytics.Risk.MaxPositions,
+		MaxTradesPerDay:  c.Analytics.Risk.MaxTradesPerDay,
+		DefaultQuantity:  c.Analytics.Risk.DefaultQuantity,
+		DayResetTimezone: c.Calendar.Timezone,
 	}
 }
 

@@ -15,6 +15,8 @@ Signal Engine          ← Phase 3 (implemented)
     ↓  SignalGenerated
 Strategy Engine        ← Phase 4 (implemented)
     ↓  StrategyDecision
+Decision/Risk Engine   ← Phase 5 (implemented)
+    ↓  ApprovedTradeIntent
 ```
 
 ## Phase 1 — Candle Engine
@@ -231,6 +233,55 @@ analytics:
 
 `GET /health/components` includes `strategy_engine` with `strategies_enabled`, `decisions_generated`, `long_entries`, `short_entries`, `exits`, and `holds`.
 
+## Phase 5 — Decision & Risk Engine
+
+### Responsibility
+
+- Subscribe to `StrategyDecision` events on the runtime bus.
+- Apply risk controls and publish `ApprovedTradeIntent` events.
+- Does **not** execute trades; downstream Execution Engine consumes approved intents.
+
+### Packages
+
+| Package | Role |
+|---------|------|
+| `internal/analytics/risk` | Risk rules, position limits, health |
+
+### Risk controls
+
+| Control | Behavior |
+|---------|----------|
+| Confidence filter | Reject when confidence is below `min_confidence` |
+| Position limit | Reject new flat entries when `max_positions` is reached |
+| Duplicate position | Reject `LONG_ENTRY` when already long; reject `SHORT_ENTRY` when already short |
+| Daily trade limit | Reject when `max_trades_per_day` approved trades are exceeded |
+
+### Configuration
+
+```yaml
+analytics:
+  risk:
+    enabled: true
+    min_confidence: 0.70
+    max_positions: 5
+    max_trades_per_day: 20
+```
+
+### Lifecycle
+
+1. Risk engine subscribes to the bus **before** the strategy engine starts.
+2. Strategy engine publishes `StrategyDecision` events.
+3. On shutdown, gateway → candle → indicator → signal → strategy → risk (reverse startup order).
+
+### Event payload (`ApprovedTradeIntent`)
+
+- `symbol`, `timeframe`, `status`, `action`, `quantity`, `strategy`, `confidence`, `reason`, `timestamp`
+- `status`: `APPROVED` or `REJECTED`
+
+### Health
+
+`GET /health/components` includes `risk_engine` with `decisions_received`, `approved_trades`, `rejected_trades`, `active_positions`, and `rejection_reasons`.
+
 ## Next phases
 
-- **Decision/Risk Engine**: consume `StrategyDecision` and publish `DecisionMade`.
+- **Execution Engine**: consume `ApprovedTradeIntent` and open/update/close trades.

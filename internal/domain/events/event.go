@@ -18,6 +18,7 @@ const (
 	IndicatorUpdated         Type = "indicator.updated"
 	SignalGenerated          Type = "signal.generated"
 	StrategyDecision         Type = "strategy.decision"
+	ApprovedTradeIntent      Type = "approved.trade.intent"
 	ContextEvaluated         Type = "context.evaluated"
 	StrategySignalGenerated  Type = "strategy.signal.generated"
 	DecisionMade             Type = "decision.made"
