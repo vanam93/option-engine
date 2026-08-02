@@ -11,8 +11,9 @@ Candle Engine          ← Phase 1 (implemented)
     ↓  CandleClosed
 Indicator Engine       ← Phase 2A (implemented)
     ↓  IndicatorUpdated
-Signal Engine          ← Phase 3 (planned)
-    ↓  StrategySignalGenerated
+Signal Engine          ← Phase 3 (implemented)
+    ↓  SignalGenerated
+Strategy Engine        ← planned
 ```
 
 ## Phase 1 — Candle Engine
@@ -113,6 +114,70 @@ analytics:
       stddev: 2.0
 ```
 
+## Phase 3 — Signal Engine
+
+### Responsibility
+
+- Subscribe to `IndicatorUpdated` events on the runtime bus.
+- Evaluate configurable technical rules and publish `SignalGenerated` events.
+- Does **not** execute trades; downstream Strategy Engine consumes signals.
+
+### Packages
+
+| Package | Role |
+|---------|------|
+| `internal/analytics/signal` | Rule evaluation, crossover state, health |
+
+### Signal types
+
+`BUY`, `SELL`, `EXIT_LONG`, `EXIT_SHORT`, `NEUTRAL`
+
+### Initial rules
+
+| Rule | Trigger |
+|------|---------|
+| EMA crossover | Fast EMA crosses above/below slow EMA |
+| MACD crossover | MACD line crosses signal line |
+| RSI | RSI below oversold → BUY; above overbought → SELL |
+| Bollinger | Close below lower band → BUY; above upper band → SELL |
+
+Rules are individually enabled/disabled. Crossover rules maintain minimal prior-value state per `(symbol, timeframe)`; threshold rules are stateless per event.
+
+### Configuration
+
+```yaml
+analytics:
+  signal:
+    enabled: true
+    ema_cross:
+      enabled: true
+      fast_period: 9
+      slow_period: 21
+    macd_cross:
+      enabled: true
+    rsi:
+      enabled: true
+      oversold: 30
+      overbought: 70
+    bollinger:
+      enabled: true
+```
+
+### Lifecycle
+
+1. Signal engine subscribes to the bus **before** the indicator engine starts.
+2. Indicator engine publishes `IndicatorUpdated` events.
+3. On shutdown, gateway → candle → indicator → signal (reverse startup order).
+
+### Event payload (`SignalGenerated`)
+
+- `symbol`, `timeframe`, `signal`, `strategy`, `confidence`, `timestamp`
+- `indicators`: map of indicator values used in the evaluation
+
+### Health
+
+`GET /health/components` includes `signal_engine` with `signals_generated`, `buy_count`, `sell_count`, `neutral_count`, and `active_rules`.
+
 ## Next phases
 
-- **Phase 3**: Signal engine consuming `IndicatorUpdated`.
+- **Strategy Engine**: consume `SignalGenerated` and publish `StrategySignalGenerated`.

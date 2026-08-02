@@ -113,6 +113,41 @@ type SymbolsConfig struct {
 type AnalyticsConfig struct {
 	Candle    CandleAnalyticsConfig    `mapstructure:"candle"`
 	Indicator IndicatorAnalyticsConfig `mapstructure:"indicator"`
+	Signal    SignalAnalyticsConfig    `mapstructure:"signal"`
+}
+
+// SignalAnalyticsConfig controls the signal evaluation engine.
+type SignalAnalyticsConfig struct {
+	Enabled          bool                     `mapstructure:"enabled"`
+	SubscriberBuffer int                      `mapstructure:"subscriber_buffer"`
+	EMACross         EMACrossAnalyticsConfig  `mapstructure:"ema_cross"`
+	MACDCross        MACDCrossAnalyticsConfig `mapstructure:"macd_cross"`
+	RSI              RSISignalAnalyticsConfig `mapstructure:"rsi"`
+	Bollinger        BollingerSignalConfig    `mapstructure:"bollinger"`
+}
+
+// EMACrossAnalyticsConfig configures the EMA crossover rule.
+type EMACrossAnalyticsConfig struct {
+	Enabled    bool `mapstructure:"enabled"`
+	FastPeriod int  `mapstructure:"fast_period"`
+	SlowPeriod int  `mapstructure:"slow_period"`
+}
+
+// MACDCrossAnalyticsConfig configures the MACD crossover rule.
+type MACDCrossAnalyticsConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
+// RSISignalAnalyticsConfig configures RSI threshold signals.
+type RSISignalAnalyticsConfig struct {
+	Enabled    bool    `mapstructure:"enabled"`
+	Oversold   float64 `mapstructure:"oversold"`
+	Overbought float64 `mapstructure:"overbought"`
+}
+
+// BollingerSignalConfig configures Bollinger band signals.
+type BollingerSignalConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // IndicatorAnalyticsConfig controls the indicator computation engine.
@@ -236,6 +271,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.indicator.macd.signal_period", 9)
 	v.SetDefault("analytics.indicator.bollinger.period", 20)
 	v.SetDefault("analytics.indicator.bollinger.stddev", 2.0)
+
+	v.SetDefault("analytics.signal.enabled", true)
+	v.SetDefault("analytics.signal.subscriber_buffer", 256)
+	v.SetDefault("analytics.signal.ema_cross.enabled", true)
+	v.SetDefault("analytics.signal.ema_cross.fast_period", 9)
+	v.SetDefault("analytics.signal.ema_cross.slow_period", 21)
+	v.SetDefault("analytics.signal.macd_cross.enabled", true)
+	v.SetDefault("analytics.signal.rsi.enabled", true)
+	v.SetDefault("analytics.signal.rsi.oversold", 30)
+	v.SetDefault("analytics.signal.rsi.overbought", 70)
+	v.SetDefault("analytics.signal.bollinger.enabled", true)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -314,6 +360,28 @@ func (c *Config) IndicatorEngineSettings() IndicatorEngineConfig {
 		ATR:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.ATR...),
 		MACD:             c.Analytics.Indicator.MACD,
 		Bollinger:        c.Analytics.Indicator.Bollinger,
+	}
+}
+
+// SignalEngineConfig is the validated signal configuration used by DI wiring.
+type SignalEngineConfig struct {
+	Enabled          bool
+	SubscriberBuffer int
+	EMACross         EMACrossAnalyticsConfig
+	MACDCross        MACDCrossAnalyticsConfig
+	RSI              RSISignalAnalyticsConfig
+	Bollinger        BollingerSignalConfig
+}
+
+// SignalEngineSettings maps analytics signal settings.
+func (c *Config) SignalEngineSettings() SignalEngineConfig {
+	return SignalEngineConfig{
+		Enabled:          c.Analytics.Signal.Enabled,
+		SubscriberBuffer: c.Analytics.Signal.SubscriberBuffer,
+		EMACross:         c.Analytics.Signal.EMACross,
+		MACDCross:        c.Analytics.Signal.MACDCross,
+		RSI:              c.Analytics.Signal.RSI,
+		Bollinger:        c.Analytics.Signal.Bollinger,
 	}
 }
 

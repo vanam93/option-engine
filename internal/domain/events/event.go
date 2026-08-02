@@ -16,6 +16,7 @@ const (
 	CandleClosed             Type = "market.candle.closed"
 	OptionChainUpdated       Type = "option.chain.updated"
 	IndicatorUpdated         Type = "indicator.updated"
+	SignalGenerated          Type = "signal.generated"
 	ContextEvaluated         Type = "context.evaluated"
 	StrategySignalGenerated  Type = "strategy.signal.generated"
 	DecisionMade             Type = "decision.made"

@@ -90,9 +90,32 @@ analytics:
     subscriber_buffer: 256
     ema:
       - period: 9
+      - period: 21
     sma:
       - period: 20
     rsi:
       - period: 14
     atr:
       - period: 14
+    macd:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+    bollinger:
+      period: 20
+      stddev: 2.0
+
+  signal:
+    enabled: true
+    ema_cross:
+      enabled: true
+      fast_period: 9
+      slow_period: 21
+    macd_cross:
+      enabled: true
+    rsi:
+      enabled: true
+      oversold: 30
+      overbought: 70
+    bollinger:
+      enabled: true
