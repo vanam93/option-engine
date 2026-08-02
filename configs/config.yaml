@@ -251,6 +251,12 @@ intelligence:
     confidence_change_threshold: 0.05
     cooldown_seconds: 300
 
+  explanation:
+    enabled: true
+    include_timeline: true
+    include_research: true
+    include_confidence_breakdown: true
+
 api:
   enabled: true
   prefix: /api/v1

@@ -465,6 +465,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("intelligence.validation.freshness_seconds", 300)
 	v.SetDefault("intelligence.validation.suppress_duplicates", true)
 
+	v.SetDefault("intelligence.explanation.enabled", true)
+	v.SetDefault("intelligence.explanation.subscriber_buffer", 256)
+	v.SetDefault("intelligence.explanation.include_timeline", true)
+	v.SetDefault("intelligence.explanation.include_research", true)
+	v.SetDefault("intelligence.explanation.include_confidence_breakdown", true)
+
 	v.SetDefault("api.enabled", true)
 	v.SetDefault("api.prefix", "/api/v1")
 	v.SetDefault("api.read_timeout", "30s")

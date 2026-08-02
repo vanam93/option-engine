@@ -41,6 +41,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
 	"github.com/vanam-gangireddy/option-engine/internal/api"
+	"github.com/vanam-gangireddy/option-engine/internal/intelligence"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendation"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendationstate"
 	"github.com/vanam-gangireddy/option-engine/internal/research"
@@ -86,6 +87,7 @@ type Container struct {
 	ValidationEngine         *intelvalidation.Engine
 	RecommendationStateEngine *recommendationstate.Engine
 	AlertEngine               *alerts.Engine
+	ExplanationEngine         *intelligence.Engine
 	IntelligenceAPI           *api.Server
 	BacktestEngine            *backtest.Engine
 	Postgres             *postgres.Pool
@@ -377,6 +379,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("alert engine: %w", err)
 	}
 
+	explanationCfg, err := config.BuildExplanationEngineConfig(cfg.ExplanationEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("explanation config: %w", err)
+	}
+	explanationEngine, err := intelligence.New(explanationCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("explanation engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -403,6 +414,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, validationEngine)
 	healthReporters = append(healthReporters, recommendationStateEngine)
 	healthReporters = append(healthReporters, alertEngine)
+	healthReporters = append(healthReporters, explanationEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -477,6 +489,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		ValidationEngine:          validationEngine,
 		RecommendationStateEngine: recommendationStateEngine,
 		AlertEngine:               alertEngine,
+		ExplanationEngine:         explanationEngine,
 		IntelligenceAPI:           intelligenceAPI,
 		BacktestEngine:            backtestEngine,
 		Postgres:             pool,
@@ -512,6 +525,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 	}
 	if c.AlertEngine != nil {
 		if err := c.AlertEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
+	if c.ExplanationEngine != nil {
+		if err := c.ExplanationEngine.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -667,6 +685,9 @@ func (c *Container) Close() {
 	}
 	if c.AlertEngine != nil {
 		_ = c.AlertEngine.Close()
+	}
+	if c.ExplanationEngine != nil {
+		_ = c.ExplanationEngine.Close()
 	}
 	if c.RecommendationStateEngine != nil {
 		_ = c.RecommendationStateEngine.Close()

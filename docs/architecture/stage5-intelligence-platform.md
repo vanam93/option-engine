@@ -3376,3 +3376,253 @@ Email digest services will poll `/api/v1/recommendations` and `/api/v1/alerts` o
 | 8 | Scanner Persistence | Planned |
 | 9 | Dashboard Layer | Planned |
 
+---
+
+## Phase 8 — Recommendation Intelligence Engine
+
+Phase 8 introduces the **Recommendation Intelligence Engine** (`internal/intelligence`). The engine transforms managed recommendation lifecycle events into human-readable intelligence documents. It answers *why* a recommendation exists, *why* confidence changed, and *what* research supports the decision. This is an explanation-only layer — it never generates, modifies, or validates recommendations.
+
+### Purpose
+
+| Goal | Detail |
+|------|--------|
+| Explain recommendations | Transform lifecycle state into trust-building narratives |
+| Read-only explanation | Never changes recommendations, confidence, or validation outcomes |
+| Single input contract | Consumes only `recommendation.state.updated` |
+| Single output contract | Publishes only `recommendation.intelligence.updated` |
+| User trust | Maximize transparency for Dashboard, Mobile, Email, and CLI consumers |
+
+### Architecture
+
+```text
+recommendation.state.updated
+    ↓
+Recommendation Intelligence Engine (internal/intelligence)
+    ↓
+recommendation.intelligence.updated
+```
+
+```mermaid
+flowchart LR
+    RSM[Recommendation State Manager]
+    BUS[EventBus]
+    RIE[Recommendation Intelligence Engine]
+    DOWN[Dashboard / API / Email / Mobile]
+
+    RSM -->|recommendation.state.updated| BUS
+    BUS --> RIE
+    RIE -->|recommendation.intelligence.updated| BUS
+    BUS --> DOWN
+```
+
+### Pipeline
+
+1. Recommendation State Manager publishes `recommendation.state.updated`.
+2. Intelligence Engine subscribes, parses the state update payload.
+3. Builder assembles an `IntelligenceDocument` with explanations, evidence, and summaries.
+4. Cache stores the latest document per `RecommendationID`.
+5. Engine publishes `recommendation.intelligence.updated` with the full document.
+
+### Responsibilities
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Engine | `engine.go` | Subscribe, handle events, publish intelligence updates |
+| Builder | `builder.go` | Assemble complete intelligence documents |
+| Explainer | `explainer.go` | Generate explanations, evidence, upgrade/downgrade detection |
+| Summary | `summary.go` | Timeline, research, and decision summaries |
+| Formatter | `formatter.go` | Human-readable labels and text formatting |
+| Cache | `cache.go` | Latest intelligence per recommendation ID (`sync.RWMutex`) |
+| Events | `events.go` | Input/output payload types |
+| Health | `health.go` | Runtime metrics and observability |
+
+### Input
+
+Consumes **only** `recommendation.state.updated` events.
+
+Parsed fields include `recommendation_id`, `symbol`, `timeframe`, `strategy`, `current_status`, `confidence`, `latest_timeline_entry`, `summary`, and optional extended fields (`components`, `optimization_summary`, `walk_forward_summary`, `monte_carlo_summary`, `supporting_indicators`, `supporting_strategies`) when present in the payload.
+
+### Output
+
+Publishes **only** `recommendation.intelligence.updated` events containing:
+
+| Field | Description |
+|-------|-------------|
+| `recommendation_id` | Stable recommendation identifier |
+| `symbol`, `timeframe`, `strategy` | Instrument context |
+| `document` | Complete `IntelligenceDocument` |
+| `generated_at` | Document generation timestamp (UTC) |
+
+### Explanation generation
+
+Each `IntelligenceDocument` contains:
+
+- Recommendation ID, symbol, timeframe, strategy
+- Recommendation level and confidence
+- Current status and recommendation state label
+- Research summary and decision summary
+- Primary explanation narrative
+- Supporting factors and risk factors
+- Timeline summary and recommendation history
+- Reason for upgrade / reason for downgrade
+- Confidence breakdown and research evidence
+
+### Confidence breakdown
+
+When `include_confidence_breakdown` is enabled, the document includes per-factor contributions:
+
+| Factor | Source |
+|--------|--------|
+| Signal Contribution | `components.signal` when available |
+| Strategy Contribution | `components.strategy` when available |
+| Performance Contribution | `components.performance` when available |
+| Optimization Contribution | `components.optimization` when available |
+| Walk Forward Contribution | `components.walkforward` when available |
+| Monte Carlo Contribution | `components.montecarlo` when available |
+| Validation Contribution | Inferred from lifecycle status |
+| Overall Confidence | Current recommendation confidence |
+
+Unavailable factors are omitted gracefully (`omitempty`).
+
+### Timeline summary
+
+When `include_timeline` is enabled, the engine accumulates timeline entries across state updates and produces a readable lifecycle narrative:
+
+```text
+Lifecycle: Recommendation Created → Status Changed (CREATED to ACTIVE) → Confidence Increased (0.7000 to 0.8200).
+```
+
+### Research summary
+
+When `include_research` is enabled, structured `ResearchEvidence` is assembled from available payload data:
+
+| Section | Example |
+|---------|---------|
+| Signal | Strong EMA crossover; MACD bullish confirmation |
+| Strategy | Trend Following confirmed |
+| Risk | Approved by validation engine |
+| Performance | Historical win rate and performance score |
+| Optimization | Optimization score 75% |
+| Walk Forward | Walk-forward validation score 71% |
+| Monte Carlo | Monte Carlo profit probability 68% |
+| Freshness | Recommendation freshness label |
+
+Sections without data are omitted.
+
+### Upgrade detection
+
+The engine compares the current document against the cached prior snapshot:
+
+| Transition | Example reason |
+|------------|----------------|
+| WATCH → BUY | Recommendation upgraded; confidence increased; validation succeeded |
+| WATCH → STRONG_BUY | Recommendation upgraded; confidence increased; optimization improved |
+
+### Downgrade detection
+
+| Transition | Example reason |
+|------------|----------------|
+| BUY → WATCH | Recommendation downgraded; confidence decreased; performance deteriorated |
+| ACTIVE → EXIT_RECOMMENDED | Status changed; exit recommended |
+
+### Configuration
+
+```yaml
+intelligence:
+  explanation:
+    enabled: true
+    include_timeline: true
+    include_research: true
+    include_confidence_breakdown: true
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable intelligence engine |
+| `include_timeline` | `true` | Include timeline summary and history |
+| `include_research` | `true` | Include research evidence and summary |
+| `include_confidence_breakdown` | `true` | Include per-factor confidence breakdown |
+
+Recommendation level thresholds are inherited from `intelligence.recommendation` settings.
+
+### Health
+
+Component name: `recommendation_intelligence_engine`
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether engine is configured on |
+| `documents_generated` | Total intelligence documents produced |
+| `average_confidence` | Mean confidence across generated documents |
+| `timeline_summaries` | Documents with timeline summaries |
+| `research_summaries` | Documents with research summaries |
+| `upgrade_explanations` | Upgrade explanations generated |
+| `downgrade_explanations` | Downgrade explanations generated |
+| `cached_documents` | Documents currently in cache |
+| `dropped` | Dropped EventBus messages |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Engine goroutine | Single consumer; stateless handler |
+| Cache | `sync.RWMutex` on per-recommendation map |
+| Health counters | Updated from consumer goroutine only |
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Engine disabled | No subscription; graceful no-op |
+| Malformed payload | Skip silently; no publish |
+| Missing optional fields | Omit sections gracefully |
+| EventBus backpressure | `dropped` counter incremented |
+
+### Future Dashboard integration
+
+| Consumer | Integration |
+|----------|-------------|
+| Dashboard | Display `document.explanation` and `research_evidence` on recommendation detail views |
+| Intelligence API | Future endpoint exposes cached intelligence documents |
+| Email digest | Include explanation narratives in recommendation emails |
+| Mobile | Show confidence breakdown and upgrade/downgrade reasons |
+| WebSocket | Fan out `recommendation.intelligence.updated` to connected clients |
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Recommendation explanation | Document generated with explanation and decision summary |
+| Research summary generation | Research evidence and summary populated |
+| Confidence breakdown | Per-factor contributions and overall confidence |
+| Upgrade explanation | WATCH → BUY upgrade reason detected |
+| Downgrade explanation | BUY → WATCH downgrade reason detected |
+| Timeline summary | Accumulated timeline narrative |
+| Event publishing | `recommendation.intelligence.updated` published |
+| Health metrics | Documents, summaries, and upgrade/downgrade counters |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Explanation-only | Never mutates recommendation state or confidence |
+| Single event input | Respects event pipeline; no cache bypass |
+| Optional payload fields | Forward-compatible with enriched state updates |
+| Per-recommendation cache | Enables upgrade/downgrade detection across updates |
+| Inherited level thresholds | Consistent classification with recommendation engine |
+
+### Phase 8 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Recommendation State Manager | ✅ Complete |
+| 6 | Alert Engine | ✅ Complete |
+| 7 | Intelligence API Layer | ✅ Complete |
+| 8 | Recommendation Intelligence Engine | ✅ Complete |
+| 9 | Scanner Persistence | Planned |
+| 10 | Dashboard Layer | Planned |
+
