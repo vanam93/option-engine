@@ -6,10 +6,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/option-engine/option-engine/internal/core/clock"
-	"github.com/option-engine/option-engine/internal/core/health"
-	"github.com/option-engine/option-engine/internal/domain/events"
-	"github.com/option-engine/option-engine/internal/providers"
+	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
+	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	"github.com/vanam-gangireddy/option-engine/internal/providers/api"
 )
 
 const providerName = "replay"
@@ -25,16 +25,19 @@ type Provider struct {
 	lastEvent      *time.Time
 	clk            *clock.ReplayClock
 	speed          float64
+	position       int
+	paused         bool
+	control        chan struct{}
 	stop           chan struct{}
 }
 
 // Register adds the replay provider factory to the registry.
-func Register(reg *providers.Registry) {
+func Register(reg *api.Registry) {
 	reg.Register(providerName, NewFromConfig)
 }
 
 // NewFromConfig constructs a replay provider from factory configuration.
-func NewFromConfig(cfg providers.FactoryConfig) (providers.Provider, error) {
+func NewFromConfig(cfg api.FactoryConfig) (api.Provider, error) {
 	startStr := getString(cfg.ProviderCfg, "start_time")
 	speed := getFloat(cfg.ProviderCfg, "speed", 1.0)
 
@@ -65,6 +68,52 @@ func New(clk *clock.ReplayClock, speed float64, recorded []events.Event) *Provid
 		clk:        clk,
 		speed:      speed,
 		stop:       make(chan struct{}),
+		control:    make(chan struct{}, 1),
+	}
+}
+
+// Pause stops replay progress without disconnecting the provider.
+func (p *Provider) Pause() { p.mu.Lock(); p.paused = true; p.mu.Unlock() }
+
+// Resume continues a paused replay.
+func (p *Provider) Resume() {
+	p.mu.Lock()
+	p.paused = false
+	p.mu.Unlock()
+	select {
+	case p.control <- struct{}{}:
+	default:
+	}
+}
+
+// SetSpeed changes the elapsed wall-clock duration for future event gaps.
+func (p *Provider) SetSpeed(speed float64) {
+	if speed <= 0 {
+		return
+	}
+	p.mu.Lock()
+	p.speed = speed
+	p.mu.Unlock()
+	select {
+	case p.control <- struct{}{}:
+	default:
+	}
+}
+
+// Seek moves replay to the first recorded event at or after at. It takes effect
+// immediately on the active session and updates the replay clock.
+func (p *Provider) Seek(at time.Time) {
+	p.mu.Lock()
+	pos := 0
+	for pos < len(p.recorded) && p.recorded[pos].Timestamp.Before(at) {
+		pos++
+	}
+	p.position = pos
+	p.clk.Set(at)
+	p.mu.Unlock()
+	select {
+	case p.control <- struct{}{}:
+	default:
 	}
 }
 
@@ -77,8 +126,8 @@ func (p *Provider) LoadEvents(evts []events.Event) {
 
 func (p *Provider) Name() string { return providerName }
 
-func (p *Provider) Capabilities() providers.Capabilities {
-	return providers.Capabilities{
+func (p *Provider) Capabilities() api.Capabilities {
+	return api.Capabilities{
 		LiveTicks:      false,
 		OptionChain:    true,
 		HistoricalData: true,
@@ -94,7 +143,7 @@ func (p *Provider) Connect(ctx context.Context) error {
 	}
 	p.connected = true
 	p.stop = make(chan struct{})
-	go p.replayLoop()
+	go p.replayLoop(p.stop)
 	return nil
 }
 
@@ -150,26 +199,52 @@ func (p *Provider) Health() health.Report {
 	}
 }
 
-func (p *Provider) replayLoop() {
-	p.mu.RLock()
-	eventsCopy := append([]events.Event(nil), p.recorded...)
-	p.mu.RUnlock()
-
+func (p *Provider) replayLoop(stop <-chan struct{}) {
 	var prev time.Time
-	for i, evt := range eventsCopy {
+	for {
+		p.mu.RLock()
+		paused := p.paused
+		pos := p.position
+		total := len(p.recorded)
+		speed := p.speed
+		var evt events.Event
+		if pos < total {
+			evt = p.recorded[pos]
+		}
+		p.mu.RUnlock()
+		if pos >= total {
+			return
+		}
+		if paused {
+			select {
+			case <-stop:
+				return
+			case <-p.control:
+				continue
+			}
+		}
 		select {
-		case <-p.stop:
+		case <-stop:
 			return
 		default:
 		}
 
-		if i > 0 && !prev.IsZero() {
+		if !prev.IsZero() {
 			gap := evt.Timestamp.Sub(prev)
-			if p.speed > 0 {
-				gap = time.Duration(float64(gap) / p.speed)
+			if speed > 0 {
+				gap = time.Duration(float64(gap) / speed)
 			}
 			if gap > 0 {
-				time.Sleep(gap)
+				timer := time.NewTimer(gap)
+				select {
+				case <-stop:
+					timer.Stop()
+					return
+				case <-p.control:
+					timer.Stop()
+					continue
+				case <-timer.C:
+				}
 			}
 			p.clk.Advance(evt.Timestamp.Sub(prev))
 		}
@@ -181,9 +256,14 @@ func (p *Provider) replayLoop() {
 			p.mu.Lock()
 			p.lastEvent = &now
 			p.mu.Unlock()
-		case <-p.stop:
+		case <-stop:
 			return
 		}
+		p.mu.Lock()
+		if p.position == pos {
+			p.position++
+		}
+		p.mu.Unlock()
 	}
 }
 

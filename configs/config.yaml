@@ -31,6 +31,7 @@ market:
   provider: mock
   mock:
     tick_interval: 1s
+    seed: 1
   replay:
     start_time: "2024-01-15T09:15:00+05:30"
     speed: 1.0
@@ -45,6 +46,12 @@ heartbeat:
 
 subscription:
   batch_size: 200
+
+event_bus:
+  subscriber_buffer: 1024
+
+validation:
+  max_tick_age: 30s
 
 calendar:
   timezone: Asia/Kolkata

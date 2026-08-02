@@ -73,7 +73,7 @@ make tidy      # Update go.sum
 |-------|--------|-------------|
 | 0 | Done | Domain models, events, interfaces |
 | 1 | Done | Foundation & architecture |
-| 2 | Next | Market Data Engine |
+| 2 | Done | Market Data Engine |
 | 3 | Planned | Storage & Replay Engine |
 | 4 | Planned | Technical Indicator Engine |
 | 5 | Planned | Option Chain Intelligence |

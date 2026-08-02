@@ -3,11 +3,11 @@ package ports
 import (
 	"context"
 
-	"github.com/option-engine/option-engine/internal/core/health"
-	"github.com/option-engine/option-engine/internal/domain/events"
-	"github.com/option-engine/option-engine/internal/domain/market"
-	"github.com/option-engine/option-engine/internal/domain/option"
-	"github.com/option-engine/option-engine/internal/providers"
+	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/option"
+	"github.com/vanam-gangireddy/option-engine/internal/providers"
 )
 
 // Provider is the canonical market data source interface.

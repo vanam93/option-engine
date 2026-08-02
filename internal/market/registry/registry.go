@@ -5,22 +5,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/option-engine/option-engine/internal/domain/market"
-	"github.com/option-engine/option-engine/internal/domain/option"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/option"
 )
 
 // Instrument is a fully typed market instrument — no magic strings downstream.
 type Instrument struct {
-	Symbol         string               `json:"symbol" yaml:"symbol"`
-	Token          string               `json:"token" yaml:"token"`
-	Exchange       string               `json:"exchange" yaml:"exchange"`
+	Symbol         string                `json:"symbol" yaml:"symbol"`
+	Token          string                `json:"token" yaml:"token"`
+	Exchange       string                `json:"exchange" yaml:"exchange"`
 	InstrumentType market.InstrumentType `json:"instrument_type" yaml:"instrument_type"`
-	Underlying     string               `json:"underlying,omitempty" yaml:"underlying,omitempty"`
-	Strike         float64              `json:"strike,omitempty" yaml:"strike,omitempty"`
-	Expiry         *time.Time           `json:"expiry,omitempty" yaml:"expiry,omitempty"`
-	OptionType     option.OptionType    `json:"option_type,omitempty" yaml:"option_type,omitempty"`
-	LotSize        int                    `json:"lot_size" yaml:"lot_size"`
-	Segment        string               `json:"segment,omitempty" yaml:"segment,omitempty"`
+	Underlying     string                `json:"underlying,omitempty" yaml:"underlying,omitempty"`
+	Strike         float64               `json:"strike,omitempty" yaml:"strike,omitempty"`
+	Expiry         *time.Time            `json:"expiry,omitempty" yaml:"expiry,omitempty"`
+	OptionType     option.OptionType     `json:"option_type,omitempty" yaml:"option_type,omitempty"`
+	LotSize        int                   `json:"lot_size" yaml:"lot_size"`
+	Segment        string                `json:"segment,omitempty" yaml:"segment,omitempty"`
 }
 
 // Registry resolves instruments by symbol or broker token.
@@ -69,7 +69,20 @@ func (r *Registry) Load(instruments []Instrument) error {
 
 // Register adds or updates a single instrument.
 func (r *Registry) Register(inst Instrument) error {
-	return r.Load([]Instrument{inst})
+	if inst.Symbol == "" || inst.Token == "" {
+		return fmt.Errorf("instrument missing symbol or token")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if old, ok := r.bySymbol[inst.Symbol]; ok {
+		delete(r.byToken, old.Token)
+	}
+	if old, ok := r.byToken[inst.Token]; ok {
+		delete(r.bySymbol, old.Symbol)
+	}
+	r.bySymbol[inst.Symbol] = inst
+	r.byToken[inst.Token] = inst
+	return nil
 }
 
 // BySymbol looks up an instrument by trading symbol.

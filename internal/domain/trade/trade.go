@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/option-engine/option-engine/internal/domain/decision"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/decision"
 )
 
 // Status tracks the lifecycle of a trade.

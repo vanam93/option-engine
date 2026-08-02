@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	httpserver "github.com/option-engine/option-engine/internal/adapters/http"
-	"github.com/option-engine/option-engine/internal/infrastructure/config"
-	"github.com/option-engine/option-engine/internal/infrastructure/logger"
+	httpserver "github.com/vanam-gangireddy/option-engine/internal/adapters/http"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

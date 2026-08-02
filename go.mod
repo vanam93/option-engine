@@ -1,6 +1,6 @@
-module github.com/option-engine/option-engine
+module github.com/vanam-gangireddy/option-engine
 
-go 1.22
+go 1.26.5
 
 require (
 	github.com/gin-gonic/gin v1.10.0

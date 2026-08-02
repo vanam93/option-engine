@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/option-engine/option-engine/internal/infrastructure/config"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 )
 
 // Pool wraps a pgx connection pool with health checking.

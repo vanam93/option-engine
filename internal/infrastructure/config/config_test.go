@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/option-engine/option-engine/internal/infrastructure/config"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/option-engine/option-engine/internal/domain/signal"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/signal"
 )
 
 // Action is the recommended trade action.

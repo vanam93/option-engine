@@ -2,16 +2,18 @@ package mock
 
 import (
 	"context"
+	"math/rand/v2"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/option-engine/option-engine/internal/core/clock"
-	"github.com/option-engine/option-engine/internal/core/health"
-	"github.com/option-engine/option-engine/internal/domain/events"
-	"github.com/option-engine/option-engine/internal/domain/market"
-	"github.com/option-engine/option-engine/internal/providers"
+	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
+	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/market"
+	"github.com/vanam-gangireddy/option-engine/internal/providers/api"
 )
 
 const providerName = "mock"
@@ -26,26 +28,34 @@ type Provider struct {
 	lastEvent      *time.Time
 	clk            clock.Clock
 	tickInterval   time.Duration
+	rng            *rand.Rand
 	stop           chan struct{}
 }
 
 // Register adds the mock provider factory to the registry.
-func Register(reg *providers.Registry) {
+func Register(reg *api.Registry) {
 	reg.Register(providerName, NewFromConfig)
 }
 
 // NewFromConfig constructs a mock provider from factory configuration.
-func NewFromConfig(cfg providers.FactoryConfig) (providers.Provider, error) {
-	interval := providers.ParseDuration(getString(cfg.ProviderCfg, "tick_interval"), "1s")
+func NewFromConfig(cfg api.FactoryConfig) (api.Provider, error) {
+	interval := api.ParseDuration(getString(cfg.ProviderCfg, "tick_interval"), "1s")
 	clk := clock.NewSystem()
 	if c, ok := cfg.Deps.Clock.(clock.Clock); ok && c != nil {
 		clk = c
 	}
-	return New(clk, interval), nil
+	seed := uint64(getInt(cfg.ProviderCfg, "seed", 1))
+	return NewSeeded(clk, interval, seed), nil
 }
 
 // New creates a mock provider with the given clock and tick interval.
 func New(clk clock.Clock, tickInterval time.Duration) *Provider {
+	return NewSeeded(clk, tickInterval, 1)
+}
+
+// NewSeeded creates a repeatable synthetic NSE feed. Equal seed and subscription
+// order produce equal price sequences.
+func NewSeeded(clk clock.Clock, tickInterval time.Duration, seed uint64) *Provider {
 	if tickInterval <= 0 {
 		tickInterval = time.Second
 	}
@@ -54,16 +64,17 @@ func New(clk clock.Clock, tickInterval time.Duration) *Provider {
 		events:       make(chan events.Event, 256),
 		clk:          clk,
 		tickInterval: tickInterval,
+		rng:          rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
 		stop:         make(chan struct{}),
 	}
 }
 
 func (p *Provider) Name() string { return providerName }
 
-func (p *Provider) Capabilities() providers.Capabilities {
-	return providers.Capabilities{
+func (p *Provider) Capabilities() api.Capabilities {
+	return api.Capabilities{
 		LiveTicks:      true,
-		OptionChain:    false,
+		OptionChain:    true,
 		HistoricalData: false,
 		Replay:         false,
 	}
@@ -77,7 +88,7 @@ func (p *Provider) Connect(ctx context.Context) error {
 	}
 	p.connected = true
 	p.stop = make(chan struct{})
-	go p.emitLoop()
+	go p.emitLoop(p.stop)
 	return nil
 }
 
@@ -129,14 +140,14 @@ func (p *Provider) Health() health.Report {
 	}
 }
 
-func (p *Provider) emitLoop() {
+func (p *Provider) emitLoop(stop <-chan struct{}) {
 	ticker := time.NewTicker(p.tickInterval)
 	defer ticker.Stop()
 
 	price := 22500.0
 	for {
 		select {
-		case <-p.stop:
+		case <-stop:
 			return
 		case <-ticker.C:
 			p.mu.RLock()
@@ -145,6 +156,7 @@ func (p *Provider) emitLoop() {
 				symbols = append(symbols, s)
 			}
 			p.mu.RUnlock()
+			sort.Strings(symbols)
 
 			if len(symbols) == 0 {
 				continue
@@ -152,15 +164,22 @@ func (p *Provider) emitLoop() {
 
 			now := p.clk.Now()
 			for _, symbol := range symbols {
-				price += 0.5
+				p.mu.Lock()
+				price += (p.rng.Float64() - 0.48) * 8
+				p.mu.Unlock()
+				if price < 1 {
+					price = 1
+				}
 				tick := market.Tick{
 					ID:             uuid.New(),
 					Symbol:         symbol,
 					Exchange:       "NSE",
 					InstrumentType: market.InstrumentIndex,
 					LTP:            price,
-					ProviderTS:     now,
-					ReceivedAt:     now,
+					Open:           price - 2, High: price + 3, Low: price - 3, Close: price - 1,
+					Bid: price - .25, Ask: price + .25, BidQty: 50, AskQty: 60, Volume: 1000, OI: 500,
+					ProviderTS: now,
+					ReceivedAt: now,
 				}
 				evt, err := events.NewEventWithClock(p.clk, events.MarketDataReceived, providerName, tick)
 				if err != nil {
@@ -187,4 +206,19 @@ func getString(m map[string]any, key string) string {
 		return ""
 	}
 	return v
+}
+
+func getInt(m map[string]any, key string, def int) int {
+	if m == nil {
+		return def
+	}
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	}
+	return def
 }

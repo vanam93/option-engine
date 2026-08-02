@@ -10,18 +10,20 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Env          string               `mapstructure:"env"`
-	HTTP         HTTPConfig           `mapstructure:"http"`
-	WebSocket    WSConfig             `mapstructure:"websocket"`
-	Postgres     PostgresConfig       `mapstructure:"postgres"`
-	Logging      LoggingConfig        `mapstructure:"logging"`
-	Shutdown     ShutdownConfig       `mapstructure:"shutdown"`
-	Market       MarketConfig         `mapstructure:"market"`
-	Provider     ProviderConfig       `mapstructure:"provider"`
-	Heartbeat    HeartbeatConfig      `mapstructure:"heartbeat"`
-	Subscription SubscriptionConfig   `mapstructure:"subscription"`
-	Calendar     CalendarConfig       `mapstructure:"calendar"`
-	Symbols      SymbolsConfig        `mapstructure:"symbols"`
+	Env          string             `mapstructure:"env"`
+	HTTP         HTTPConfig         `mapstructure:"http"`
+	WebSocket    WSConfig           `mapstructure:"websocket"`
+	Postgres     PostgresConfig     `mapstructure:"postgres"`
+	Logging      LoggingConfig      `mapstructure:"logging"`
+	Shutdown     ShutdownConfig     `mapstructure:"shutdown"`
+	Market       MarketConfig       `mapstructure:"market"`
+	Provider     ProviderConfig     `mapstructure:"provider"`
+	Heartbeat    HeartbeatConfig    `mapstructure:"heartbeat"`
+	Subscription SubscriptionConfig `mapstructure:"subscription"`
+	EventBus     EventBusConfig     `mapstructure:"event_bus"`
+	Validation   ValidationConfig   `mapstructure:"validation"`
+	Calendar     CalendarConfig     `mapstructure:"calendar"`
+	Symbols      SymbolsConfig      `mapstructure:"symbols"`
 }
 
 type HTTPConfig struct {
@@ -79,6 +81,12 @@ type HeartbeatConfig struct {
 
 type SubscriptionConfig struct {
 	BatchSize int `mapstructure:"batch_size"`
+}
+type EventBusConfig struct {
+	SubscriberBuffer int `mapstructure:"subscriber_buffer"`
+}
+type ValidationConfig struct {
+	MaxTickAge time.Duration `mapstructure:"max_tick_age"`
 }
 
 // CalendarConfig drives the NSE market calendar.
@@ -146,6 +154,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("provider.reconnect.max_retries", -1)
 	v.SetDefault("heartbeat.interval", "10s")
 	v.SetDefault("subscription.batch_size", 200)
+	v.SetDefault("event_bus.subscriber_buffer", 1024)
+	v.SetDefault("validation.max_tick_age", "30s")
 
 	v.SetDefault("calendar.timezone", "Asia/Kolkata")
 	v.SetDefault("calendar.regular_open", "09:15")

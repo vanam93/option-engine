@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/option-engine/option-engine/internal/application/ports"
-	"github.com/option-engine/option-engine/internal/infrastructure/config"
-	"github.com/option-engine/option-engine/internal/infrastructure/logger"
+	"github.com/vanam-gangireddy/option-engine/internal/application/ports"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 )
 
 // Server wraps the Gin HTTP server.

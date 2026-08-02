@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/option-engine/option-engine/internal/core/calendar"
-	"github.com/option-engine/option-engine/internal/core/clock"
+	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
+	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

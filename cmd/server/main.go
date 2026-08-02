@@ -11,9 +11,9 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
-	"github.com/option-engine/option-engine/internal/infrastructure/config"
-	"github.com/option-engine/option-engine/internal/infrastructure/di"
-	"github.com/option-engine/option-engine/internal/infrastructure/logger"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/config"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/di"
+	"github.com/vanam-gangireddy/option-engine/internal/infrastructure/logger"
 )
 
 func main() {

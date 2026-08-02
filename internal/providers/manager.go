@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/option-engine/option-engine/internal/core/health"
-	"github.com/option-engine/option-engine/internal/domain/events"
+	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 )
 
 // Manager owns the lifecycle of the active market data provider.
@@ -20,11 +20,12 @@ type Manager struct {
 
 // ManagerConfig drives provider selection and runtime behaviour.
 type ManagerConfig struct {
-	ActiveProvider string
-	ProviderCfg    map[string]any
-	Reconnect      ReconnectConfig
-	Subscription   SubscriptionConfig
-	Heartbeat      HeartbeatConfig
+	ActiveProvider  string
+	ProviderCfg     map[string]any
+	Reconnect       ReconnectConfig
+	Subscription    SubscriptionConfig
+	Heartbeat       HeartbeatConfig
+	ShutdownTimeout time.Duration
 }
 
 // NewManager creates a manager without an active provider.
@@ -142,14 +143,7 @@ func (m *Manager) Switch(ctx context.Context, name string) error {
 		// best effort
 	}
 
-	p, err := CreateFromConfig(
-		m.reg,
-		name,
-		m.cfg.Reconnect,
-		m.cfg.Subscription,
-		m.cfg.Heartbeat,
-		m.cfg.ProviderCfg,
-	)
+	p, err := m.reg.Create(name, FactoryConfig{Name: name, ProviderCfg: m.cfg.ProviderCfg, Reconnect: m.cfg.Reconnect, Subscription: m.cfg.Subscription, Heartbeat: m.cfg.Heartbeat})
 	if err != nil {
 		return err
 	}
@@ -187,7 +181,9 @@ func (m *Manager) ReconnectLoop(ctx context.Context) {
 		report := m.Health()
 		if report.Connected {
 			attempts = 0
-			time.Sleep(interval)
+			if !wait(ctx, interval) {
+				return
+			}
 			continue
 		}
 
@@ -197,6 +193,19 @@ func (m *Manager) ReconnectLoop(ctx context.Context) {
 
 		attempts++
 		_ = m.Connect(ctx)
-		time.Sleep(interval)
+		if !wait(ctx, interval) {
+			return
+		}
+	}
+}
+
+func wait(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
 	}
 }

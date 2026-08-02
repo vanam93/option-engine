@@ -1,11 +1,8 @@
 package providers
 
 import (
-	"fmt"
-	"time"
-
-	"github.com/option-engine/option-engine/internal/providers/mock"
-	"github.com/option-engine/option-engine/internal/providers/replay"
+	"github.com/vanam-gangireddy/option-engine/internal/providers/mock"
+	"github.com/vanam-gangireddy/option-engine/internal/providers/replay"
 )
 
 // DefaultRegistry returns a registry with built-in mock and replay providers.
@@ -27,35 +24,4 @@ func CreateFromConfig(reg *Registry, marketProvider string, reconnect ReconnectC
 		Subscription: subscription,
 		Heartbeat:    heartbeat,
 	})
-}
-
-// ParseDuration parses a duration string with a sensible default.
-func ParseDuration(raw, fallback string) time.Duration {
-	if raw == "" {
-		raw = fallback
-	}
-	d, err := time.ParseDuration(raw)
-	if err != nil {
-		d, _ = time.ParseDuration(fallback)
-	}
-	return d
-}
-
-// MaxRetries returns max retries; -1 means unlimited.
-func MaxRetries(n int) int {
-	if n == 0 {
-		return -1
-	}
-	return n
-}
-
-// ValidateCapabilities ensures the provider meets minimum requirements.
-func ValidateCapabilities(p Provider, checks ...func(Capabilities) bool) error {
-	caps := p.Capabilities()
-	for _, check := range checks {
-		if !check(caps) {
-			return fmt.Errorf("provider %q missing required capability", p.Name())
-		}
-	}
-	return nil
 }
