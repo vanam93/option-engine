@@ -24,6 +24,19 @@ func BuildIndicatorEngineConfig(cfg IndicatorEngineConfig) (indicator.Config, er
 	if err := appendPeriods(&out.ATR, cfg.ATR, "atr"); err != nil {
 		return indicator.Config{}, err
 	}
+	if cfg.MACD.FastPeriod > 0 || cfg.MACD.SlowPeriod > 0 || cfg.MACD.SignalPeriod > 0 {
+		out.MACD = &indicator.MACDConfig{
+			FastPeriod:   cfg.MACD.FastPeriod,
+			SlowPeriod:   cfg.MACD.SlowPeriod,
+			SignalPeriod: cfg.MACD.SignalPeriod,
+		}
+	}
+	if cfg.Bollinger.Period > 0 || cfg.Bollinger.StdDev > 0 {
+		out.Bollinger = &indicator.BollingerConfig{
+			Period: cfg.Bollinger.Period,
+			StdDev: cfg.Bollinger.StdDev,
+		}
+	}
 	return out, nil
 }
 

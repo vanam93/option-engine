@@ -89,7 +89,30 @@ See `internal/analytics/candle/VOLUME_CONTRACT.md`. Default mode is `cumulative`
 - Reuses the existing indicator cache and `IndicatorUpdated` contract.
 - Default periods: RSI(14), ATR(14).
 
+## Phase 2C — MACD and Bollinger Bands
+
+- Incremental MACD: fast EMA, slow EMA, signal EMA, and histogram.
+- Incremental Bollinger Bands: middle (SMA), upper/lower bands, bandwidth, and %B.
+- Configurable via `analytics.indicator.macd` and `analytics.indicator.bollinger`.
+- Default MACD: fast 12, slow 26, signal 9.
+- Default Bollinger: period 20, stddev 2.0.
+- Warm-up: MACD publishes after slow EMA and signal EMA are satisfied; Bollinger after the SMA window fills.
+- Health includes `macd_instances`, `bollinger_instances`, and `warmed_instances`.
+
+### Configuration
+
+```yaml
+analytics:
+  indicator:
+    macd:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+    bollinger:
+      period: 20
+      stddev: 2.0
+```
+
 ## Next phases
 
-- **Phase 2C**: Additional indicators (MACD, Bollinger Bands, etc.)
 - **Phase 3**: Signal engine consuming `IndicatorUpdated`.

@@ -164,8 +164,10 @@ func (e *Engine) Health() health.Report {
 	e.mu.Unlock()
 
 	active := 0
+	stats := CacheStats{}
 	if e.cache != nil {
 		active = e.cache.ActiveSeries()
+		stats = e.cache.Stats()
 	}
-	return e.health.report(e.cfg, connected, dropped, active)
+	return e.health.report(e.cfg, connected, dropped, active, stats)
 }

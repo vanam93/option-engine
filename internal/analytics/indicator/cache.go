@@ -19,10 +19,19 @@ type rsiSet map[int]*indicators.RSI
 type atrSet map[int]*indicators.ATR
 
 type seriesState struct {
-	ema emaSet
-	sma smaSet
-	rsi rsiSet
-	atr atrSet
+	ema       emaSet
+	sma       smaSet
+	rsi       rsiSet
+	atr       atrSet
+	macd      *indicators.MACD
+	bollinger *indicators.Bollinger
+}
+
+// CacheStats holds runtime indicator instance counters.
+type CacheStats struct {
+	MACDInstances      int
+	BollingerInstances int
+	WarmedInstances    int
 }
 
 // Cache stores incremental indicator state per symbol and timeframe.
@@ -32,17 +41,21 @@ type Cache struct {
 	smaCfg []int
 	rsiCfg []int
 	atrCfg []int
+	macdCfg      *MACDConfig
+	bollingerCfg *BollingerConfig
 	series map[seriesKey]*seriesState
 }
 
 // NewCache creates indicator state storage from configuration.
 func NewCache(cfg Config) *Cache {
 	return &Cache{
-		emaCfg: cfg.EMAPeriods(),
-		smaCfg: cfg.SMAPeriods(),
-		rsiCfg: cfg.RSIPeriods(),
-		atrCfg: cfg.ATRPeriods(),
-		series: make(map[seriesKey]*seriesState),
+		emaCfg:       cfg.EMAPeriods(),
+		smaCfg:       cfg.SMAPeriods(),
+		rsiCfg:       cfg.RSIPeriods(),
+		atrCfg:       cfg.ATRPeriods(),
+		macdCfg:      cfg.MACD,
+		bollingerCfg: cfg.Bollinger,
+		series:       make(map[seriesKey]*seriesState),
 	}
 }
 
@@ -87,6 +100,18 @@ func (c *Cache) Update(candle market.Candle) []domainindicator.IndicatorValue {
 		}
 		out = append(out, newIndicatorValue(domainindicator.ATR, candle, period, result))
 	}
+	if state.macd != nil {
+		result := state.macd.Update(candle.Close)
+		if result.WarmedUp {
+			out = append(out, newMACDIndicatorValue(candle, c.macdCfg, result))
+		}
+	}
+	if state.bollinger != nil {
+		result := state.bollinger.Update(candle.Close)
+		if result.WarmedUp {
+			out = append(out, newBollingerIndicatorValue(candle, c.bollingerCfg, result))
+		}
+	}
 	return out
 }
 
@@ -109,6 +134,12 @@ func (c *Cache) newSeriesState() *seriesState {
 	for _, period := range c.atrCfg {
 		state.atr[period] = indicators.NewATR(period)
 	}
+	if c.macdCfg != nil {
+		state.macd = indicators.NewMACD(c.macdCfg.FastPeriod, c.macdCfg.SlowPeriod, c.macdCfg.SignalPeriod)
+	}
+	if c.bollingerCfg != nil {
+		state.bollinger = indicators.NewBollinger(c.bollingerCfg.Period, c.bollingerCfg.StdDev)
+	}
 	return state
 }
 
@@ -117,4 +148,47 @@ func (c *Cache) ActiveSeries() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.series)
+}
+
+// Stats returns runtime instance counters across all tracked series.
+func (c *Cache) Stats() CacheStats {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var stats CacheStats
+	for _, state := range c.series {
+		for _, ema := range state.ema {
+			if _, warmed := ema.Value(); warmed {
+				stats.WarmedInstances++
+			}
+		}
+		for _, sma := range state.sma {
+			if _, warmed := sma.Value(); warmed {
+				stats.WarmedInstances++
+			}
+		}
+		for _, rsi := range state.rsi {
+			if _, warmed := rsi.Value(); warmed {
+				stats.WarmedInstances++
+			}
+		}
+		for _, atr := range state.atr {
+			if _, warmed := atr.Value(); warmed {
+				stats.WarmedInstances++
+			}
+		}
+		if state.macd != nil {
+			stats.MACDInstances++
+			if _, _, _, warmed := state.macd.Value(); warmed {
+				stats.WarmedInstances++
+			}
+		}
+		if state.bollinger != nil {
+			stats.BollingerInstances++
+			if _, _, _, _, _, warmed := state.bollinger.Value(); warmed {
+				stats.WarmedInstances++
+			}
+		}
+	}
+	return stats
 }

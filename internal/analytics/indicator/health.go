@@ -25,7 +25,7 @@ func (h *healthSnapshot) recordPublished(n int) {
 	}
 }
 
-func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, activeSeries int) health.Report {
+func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, activeSeries int, stats CacheStats) health.Report {
 	status := health.StatusHealthy
 	if cfg.Enabled && !connected {
 		status = health.StatusDegraded
@@ -56,7 +56,10 @@ func (h *healthSnapshot) report(cfg Config, connected bool, dropped uint64, acti
 			"ema_periods":    intSliceString(cfg.EMAPeriods()),
 			"sma_periods":    intSliceString(cfg.SMAPeriods()),
 			"rsi_periods":    intSliceString(cfg.RSIPeriods()),
-			"atr_periods":    intSliceString(cfg.ATRPeriods()),
+			"atr_periods":          intSliceString(cfg.ATRPeriods()),
+			"macd_instances":       u64String(uint64(stats.MACDInstances)),
+			"bollinger_instances":  u64String(uint64(stats.BollingerInstances)),
+			"warmed_instances":     u64String(uint64(stats.WarmedInstances)),
 		},
 	}
 }

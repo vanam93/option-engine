@@ -119,10 +119,25 @@ type AnalyticsConfig struct {
 type IndicatorAnalyticsConfig struct {
 	Enabled          bool                   `mapstructure:"enabled"`
 	SubscriberBuffer int                    `mapstructure:"subscriber_buffer"`
-	EMA              []IndicatorPeriodConfig `mapstructure:"ema"`
-	SMA              []IndicatorPeriodConfig `mapstructure:"sma"`
-	RSI              []IndicatorPeriodConfig `mapstructure:"rsi"`
-	ATR              []IndicatorPeriodConfig `mapstructure:"atr"`
+	EMA              []IndicatorPeriodConfig  `mapstructure:"ema"`
+	SMA              []IndicatorPeriodConfig  `mapstructure:"sma"`
+	RSI              []IndicatorPeriodConfig  `mapstructure:"rsi"`
+	ATR              []IndicatorPeriodConfig  `mapstructure:"atr"`
+	MACD             MACDAnalyticsConfig    `mapstructure:"macd"`
+	Bollinger        BollingerAnalyticsConfig `mapstructure:"bollinger"`
+}
+
+// MACDAnalyticsConfig configures MACD periods.
+type MACDAnalyticsConfig struct {
+	FastPeriod   int `mapstructure:"fast_period"`
+	SlowPeriod   int `mapstructure:"slow_period"`
+	SignalPeriod int `mapstructure:"signal_period"`
+}
+
+// BollingerAnalyticsConfig configures Bollinger Bands.
+type BollingerAnalyticsConfig struct {
+	Period int     `mapstructure:"period"`
+	StdDev float64 `mapstructure:"stddev"`
 }
 
 // IndicatorPeriodConfig is a lookback period for an indicator.
@@ -216,6 +231,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("analytics.indicator.sma", []map[string]any{{"period": 20}})
 	v.SetDefault("analytics.indicator.rsi", []map[string]any{{"period": 14}})
 	v.SetDefault("analytics.indicator.atr", []map[string]any{{"period": 14}})
+	v.SetDefault("analytics.indicator.macd.fast_period", 12)
+	v.SetDefault("analytics.indicator.macd.slow_period", 26)
+	v.SetDefault("analytics.indicator.macd.signal_period", 9)
+	v.SetDefault("analytics.indicator.bollinger.period", 20)
+	v.SetDefault("analytics.indicator.bollinger.stddev", 2.0)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -279,6 +299,8 @@ type IndicatorEngineConfig struct {
 	SMA              []IndicatorPeriodConfig
 	RSI              []IndicatorPeriodConfig
 	ATR              []IndicatorPeriodConfig
+	MACD             MACDAnalyticsConfig
+	Bollinger        BollingerAnalyticsConfig
 }
 
 // IndicatorEngineSettings maps analytics indicator settings.
@@ -290,6 +312,8 @@ func (c *Config) IndicatorEngineSettings() IndicatorEngineConfig {
 		SMA:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.SMA...),
 		RSI:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.RSI...),
 		ATR:              append([]IndicatorPeriodConfig(nil), c.Analytics.Indicator.ATR...),
+		MACD:             c.Analytics.Indicator.MACD,
+		Bollinger:        c.Analytics.Indicator.Bollinger,
 	}
 }
 
