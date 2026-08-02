@@ -245,3 +245,8 @@ intelligence:
   recommendation_state:
     enabled: true
     max_active: 10000
+
+  alerts:
+    enabled: true
+    confidence_change_threshold: 0.05
+    cooldown_seconds: 300

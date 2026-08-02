@@ -2031,3 +2031,727 @@ All future consumers subscribe to `recommendation.state.updated` only. They neve
 | 7 | Scanner Persistence | Planned |
 | 8 | Query Layer | Planned |
 
+---
+
+## Phase 6 — Alert Engine
+
+Phase 6 introduces the **Alert Engine** (`internal/alerts`). The engine consumes **only** `recommendation.state.updated` events and publishes **only** `alert.generated` events. Alerts are downstream consumers — they never influence recommendation generation. No provider dependency, notification channel, or broker integration is included in this phase.
+
+### Purpose
+
+| Goal | Detail |
+|------|--------|
+| Meaningful notifications | Emit alerts only for significant recommendation lifecycle changes |
+| Downstream-only | Consume recommendation state; never read upstream caches or influence generation |
+| Event contract | Single input (`recommendation.state.updated`), single output (`alert.generated`) |
+| Deduplication | Suppress identical alerts within a configurable cooldown window |
+| Future-ready | Publish structured alerts for Dashboard, Email, Push, Telegram, Slack, WhatsApp |
+
+### Pipeline
+
+```text
+Recommendation State Manager
+    ↓
+recommendation.state.updated
+    ↓
+Alert Engine
+    ↓
+alert.generated
+    ↓
+Future Consumers:
+    Dashboard
+    Email
+    Push Notifications
+    Telegram
+    Slack
+    WhatsApp
+```
+
+### Goals
+
+| Goal | Detail |
+|------|--------|
+| Lifecycle-driven alerts | Derive alert types from recommendation timeline entries and status transitions |
+| Threshold filtering | Confidence alerts require delta ≥ `confidence_change_threshold` |
+| No alert spam | Skip non-meaningful updates; deduplicate via fingerprint + cooldown |
+| Thread-safe | Mutex-protected cache; single consumer goroutine |
+| Graceful shutdown | Context cancel, subscription drain, WaitGroup join |
+| No execution | Intelligence output only; never routes orders |
+
+### Package layout
+
+```text
+internal/alerts/
+├── engine.go       # Subscription, rule evaluation, dedup, publish
+├── config.go       # Enabled flag, thresholds, cooldown, subscriber buffer
+├── rules.go        # Alert type derivation from state updates
+├── cache.go        # Deduplication fingerprints, alert ID sequencing
+├── events.go       # AlertGenerated payload and alert types
+├── health.go       # Health reporter
+├── errors.go       # Structured errors
+└── engine_test.go  # Creation, status, confidence, dedup, cooldown, publish tests
+```
+
+Configuration wiring: `internal/infrastructure/config/alerts.go`
+
+### Architecture
+
+```mermaid
+flowchart TB
+    RSM[Recommendation State Manager]
+    BUS[EventBus]
+    AE[Alert Engine]
+    RULES[Rules]
+    CACHE[Cache]
+    FUTURE["Future Consumers\n(Dashboard, Email, Push, Telegram, Slack, WhatsApp)"]
+
+    RSM -->|recommendation.state.updated| BUS
+    BUS --> AE
+    AE --> RULES
+    AE --> CACHE
+    AE -->|alert.generated| BUS
+    BUS -.-> FUTURE
+```
+
+### Component responsibilities
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Engine | `engine.go` | Subscribe to `recommendation.state.updated`, evaluate rules, deduplicate, publish |
+| Rules | `rules.go` | Map timeline entries and status transitions to alert types |
+| Cache | `cache.go` | Track seen recommendations, fingerprint cooldown, alert ID generation |
+| Events | `events.go` | `AlertGenerated` payload and alert type constants |
+| Health | `health.go` | Alert counters and suppression statistics |
+| Config | `config.go` | `enabled`, `confidence_change_threshold`, `cooldown_seconds` |
+
+### Lifecycle diagram
+
+```mermaid
+flowchart LR
+    subgraph Input["recommendation.state.updated"]
+        TL[Latest Timeline Entry]
+        ST[Current Status]
+        CF[Confidence]
+    end
+
+    subgraph Rules["Alert Rules"]
+        RC[RECOMMENDATION_CREATED]
+        CI[CONFIDENCE_INCREASED]
+        CD[CONFIDENCE_DECREASED]
+        SC[STATUS_CHANGED]
+        EZ[ENTRY_ZONE_REACHED]
+        ER[EXIT_RECOMMENDED]
+        CL[RECOMMENDATION_CLOSED]
+    end
+
+    subgraph Output["alert.generated"]
+        AG[Alert Payload]
+    end
+
+    TL --> Rules
+    ST --> Rules
+    CF --> Rules
+    Rules --> AG
+```
+
+### Alert rules
+
+Alerts are derived from the `latest_timeline_entry` event and first-observation state. Not every `recommendation.state.updated` event produces an alert.
+
+| Alert type | Trigger |
+|------------|---------|
+| `RECOMMENDATION_CREATED` | First observation of a `recommendation_id` |
+| `CONFIDENCE_INCREASED` | Timeline event `Confidence Increased` with delta ≥ `confidence_change_threshold` |
+| `CONFIDENCE_DECREASED` | Timeline event `Confidence Decreased` with delta ≥ `confidence_change_threshold` |
+| `STATUS_CHANGED` | Timeline event `Status Changed` to a non-`ACTIVE` meaningful transition (e.g. `ACTIVE` → `WATCH`) |
+| `ENTRY_ZONE_REACHED` | Timeline event `Status Changed` with `new_value` = `ACTIVE` (e.g. `WATCH` → `ACTIVE`, `CREATED` → `ACTIVE`) |
+| `EXIT_RECOMMENDED` | Timeline event `Exit Recommended` |
+| `RECOMMENDATION_CLOSED` | Timeline event `Closed` |
+
+#### Meaningful transition examples
+
+| Transition | Alert type |
+|------------|------------|
+| New recommendation | `RECOMMENDATION_CREATED` + `ENTRY_ZONE_REACHED` (when status becomes `ACTIVE`) |
+| `ACTIVE` → `WATCH` | `STATUS_CHANGED` |
+| `WATCH` → `ACTIVE` | `ENTRY_ZONE_REACHED` |
+| `ACTIVE` → `EXIT_RECOMMENDED` | `EXIT_RECOMMENDED` |
+| `EXIT_RECOMMENDED` → `CLOSED` | `RECOMMENDATION_CLOSED` |
+| Confidence +0.08 (threshold 0.05) | `CONFIDENCE_INCREASED` |
+| Confidence −0.02 (threshold 0.05) | *(no alert — below threshold)* |
+
+### Deduplication
+
+The cache maintains a fingerprint per alert candidate:
+
+```text
+fingerprint = recommendation_id + alert_type + current_status + reason
+```
+
+Before publishing, the engine checks whether an identical fingerprint was emitted within `cooldown_seconds`. If so, the alert is suppressed and `cooldown_suppressed` is incremented.
+
+### Cooldown
+
+| Setting | Default | Behavior |
+|---------|---------|----------|
+| `cooldown_seconds` | `300` | Minimum interval between identical alert fingerprints |
+
+Cooldown is evaluated against the timeline entry timestamp from the state update. After the cooldown window expires, the same alert type may fire again for the same recommendation (e.g. repeated confidence increases).
+
+### Event contract: `alert.generated`
+
+Published when a meaningful lifecycle change passes rule evaluation and deduplication.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alert_id` | string | yes | Unique alert identifier (`ALT-{YYYYMMDD}-{SYMBOL}-{sequence}`) |
+| `recommendation_id` | string | yes | Stable recommendation identifier |
+| `symbol` | string | yes | Instrument symbol |
+| `timeframe` | string | yes | Bar timeframe |
+| `alert_type` | string | yes | One of the alert type constants |
+| `current_status` | string | yes | Lifecycle status at alert time |
+| `confidence` | float64 | yes | Confidence at alert time |
+| `message` | string | yes | Human-readable alert summary |
+| `reason` | string | yes | Explanation from timeline entry |
+| `generated_at` | time | yes | Alert generation timestamp |
+
+### Configuration
+
+```yaml
+intelligence:
+  alerts:
+    enabled: true
+    confidence_change_threshold: 0.05
+    cooldown_seconds: 300
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable alert engine |
+| `subscriber_buffer` | `256` | Event bus subscriber buffer |
+| `confidence_change_threshold` | `0.05` | Minimum confidence delta for increase/decrease alerts |
+| `cooldown_seconds` | `300` | Deduplication cooldown window |
+
+### Engine lifecycle
+
+#### Startup order
+
+Alert Engine subscribes **before** Recommendation State Manager publishes:
+
+```text
+AlertEngine → RecommendationState → Validation → Recommendation → Opportunity → Scanner → … → Gateway
+```
+
+#### Shutdown order (reverse)
+
+```text
+Gateway → … → Scanner → Opportunity → Recommendation → Validation → RecommendationState → AlertEngine
+```
+
+#### Lifecycle steps
+
+1. `New(cfg, bus, clk)` — validate config, allocate deduplication cache.
+2. `Start(ctx)` — subscribe to `recommendation.state.updated` only, launch consumer goroutine.
+3. Consumer loop — parse state update, evaluate rules, deduplicate, publish `alert.generated`.
+4. `Close()` — cancel context, drain subscription, wait on WaitGroup, close subscription.
+
+### Component diagram
+
+```mermaid
+flowchart LR
+    subgraph alerts_pkg["internal/alerts"]
+        ENG[Engine]
+        CFG[Config]
+        RULES[Rules]
+        CACHE[Cache]
+        EVT[Events]
+        HLTH[Health]
+    end
+
+    ENG --> CFG
+    ENG --> RULES
+    ENG --> CACHE
+    ENG --> EVT
+    ENG --> HLTH
+    RULES --> CACHE
+```
+
+### Event flow
+
+```mermaid
+sequenceDiagram
+    participant RSM as Recommendation State Manager
+    participant BUS as EventBus
+    participant AE as Alert Engine
+    participant RULES as Rules
+    participant CACHE as Cache
+
+    RSM->>BUS: recommendation.state.updated
+    BUS->>AE: recommendation.state.updated
+    AE->>RULES: Evaluate timeline + status
+    RULES-->>AE: Alert candidates
+    loop Each candidate
+        AE->>CACHE: Check fingerprint cooldown
+        alt Cooldown expired or new fingerprint
+            AE->>CACHE: Record fingerprint, generate AlertID
+            AE->>BUS: alert.generated
+        else Suppressed
+            AE->>AE: Increment cooldown_suppressed
+        end
+    end
+```
+
+### Health monitoring
+
+`GET /health/components` includes `alert_engine`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether engine is configured on |
+| `alerts_generated` | Total alerts published |
+| `duplicates_suppressed` | Alerts suppressed as logical duplicates |
+| `confidence_alerts` | Confidence increase/decrease alerts published |
+| `status_alerts` | Status, entry zone, and exit alerts published |
+| `created_alerts` | Recommendation created alerts published |
+| `closed_alerts` | Recommendation closed alerts published |
+| `cooldown_suppressed` | Alerts suppressed by cooldown deduplication |
+| `dropped` | Subscription dropped event count |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Cache | `sync.Mutex` on fingerprints, seen IDs, and ID sequencing |
+| Engine lifecycle | `sync.Mutex` on started/closed flags |
+| Health counters | Updated on each processed candidate |
+| Event processing | Single consumer goroutine |
+| Alert ID generation | Protected under cache write lock |
+
+Rules:
+
+- No lock held during bus publish
+- `Health()` safe for concurrent HTTP probe goroutines
+- Deduplication state is private to the alert engine
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Malformed `recommendation.state.updated` payload | Skip silently; no publish |
+| No meaningful lifecycle change | Skip; no publish |
+| Confidence delta below threshold | Skip confidence alert; other candidates may still fire |
+| Cooldown active for fingerprint | Suppress; increment `cooldown_suppressed` |
+| Bus publish error | Skip; dedup state still updated |
+| Shutdown mid-event | Drain subscription before exit |
+
+### Future integrations
+
+| Consumer | Integration |
+|----------|-------------|
+| Dashboard | Subscribe to `alert.generated`; display real-time alert feed and history |
+| Email | SMTP/webhook adapter consuming `alert.generated` for digest and instant notifications |
+| Push Notifications | Mobile push gateway (FCM/APNs) triggered by `alert.generated` |
+| Telegram | Bot webhook adapter filtering by symbol and alert type |
+| Slack | Incoming webhook or Slack API for channel notifications |
+| WhatsApp | Business API adapter for trader alert delivery |
+
+All notification channels are **future adapters** that subscribe to `alert.generated`. The Alert Engine itself has no provider or channel dependency.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Recommendation created alert | First observation emits `RECOMMENDATION_CREATED` and `ENTRY_ZONE_REACHED` |
+| Status change alert | `ACTIVE` → `WATCH` emits `STATUS_CHANGED` |
+| Confidence increase alert | Delta above threshold emits `CONFIDENCE_INCREASED` |
+| Duplicate suppression | Identical state update does not re-emit alerts |
+| Cooldown behavior | Same fingerprint suppressed within cooldown; fires after expiry |
+| Event publish | State update triggers `alert.generated` with correct source |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Consume only `recommendation.state.updated` | Alerts reflect managed lifecycle, not raw analytics |
+| Publish only `alert.generated` | Clean downstream contract for all notification surfaces |
+| Threshold-gated confidence alerts | Prevents noise from minor confidence fluctuations |
+| Fingerprint + cooldown dedup | Prevents alert storms on repeated identical updates |
+| Multiple alerts per update | Creation + entry zone are distinct meaningful events |
+| No notification providers | Keeps engine focused; channels are future adapters |
+| In-memory dedup state | Phase 6 scope; persistent alert history deferred to future phase |
+
+### Phase 6 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Recommendation State Manager | ✅ Complete |
+| 6 | Alert Engine | ✅ Complete |
+| 7 | Scanner Persistence | Planned |
+| 8 | Query Layer | Planned |
+
+---
+
+## Phase 6 — Alert Engine
+
+Phase 6 introduces the **Alert Engine** (`internal/alerts`). The engine consumes **only** `recommendation.state.updated` events and publishes **only** `alert.generated` events. Alerts are downstream consumers — they never influence recommendation generation. No provider dependency, notification channel, or broker integration is included in this phase.
+
+### Purpose
+
+| Goal | Detail |
+|------|--------|
+| Meaningful notifications | Emit alerts only for significant recommendation lifecycle changes |
+| Downstream-only | Consume recommendation state; never read upstream caches or influence generation |
+| Event contract | Single input (`recommendation.state.updated`), single output (`alert.generated`) |
+| Deduplication | Suppress identical alerts within a configurable cooldown window |
+| Future-ready | Publish structured alerts for Dashboard, Email, Push, Telegram, Slack, WhatsApp |
+
+### Pipeline
+
+```text
+Recommendation State Manager
+    ↓
+recommendation.state.updated
+    ↓
+Alert Engine
+    ↓
+alert.generated
+    ↓
+Future Consumers:
+    Dashboard
+    Email
+    Push Notifications
+    Telegram
+    Slack
+    WhatsApp
+```
+
+### Goals
+
+| Goal | Detail |
+|------|--------|
+| Lifecycle-driven alerts | Derive alert types from recommendation timeline entries and status transitions |
+| Threshold filtering | Confidence alerts require delta ≥ `confidence_change_threshold` |
+| No alert spam | Skip non-meaningful updates; deduplicate via fingerprint + cooldown |
+| Thread-safe | Mutex-protected cache; single consumer goroutine |
+| Graceful shutdown | Context cancel, subscription drain, WaitGroup join |
+| No execution | Intelligence output only; never routes orders |
+
+### Package layout
+
+```text
+internal/alerts/
+├── engine.go       # Subscription, rule evaluation, dedup, publish
+├── config.go       # Enabled flag, thresholds, cooldown, subscriber buffer
+├── rules.go        # Alert type derivation from state updates
+├── cache.go        # Deduplication fingerprints, alert ID sequencing
+├── events.go       # AlertGenerated payload and alert types
+├── health.go       # Health reporter
+├── errors.go       # Structured errors
+└── engine_test.go  # Creation, status, confidence, dedup, cooldown, publish tests
+```
+
+Configuration wiring: `internal/infrastructure/config/alerts.go`
+
+### Architecture
+
+```mermaid
+flowchart TB
+    RSM[Recommendation State Manager]
+    BUS[EventBus]
+    AE[Alert Engine]
+    RULES[Rules]
+    CACHE[Cache]
+    FUTURE["Future Consumers\n(Dashboard, Email, Push, Telegram, Slack, WhatsApp)"]
+
+    RSM -->|recommendation.state.updated| BUS
+    BUS --> AE
+    AE --> RULES
+    AE --> CACHE
+    AE -->|alert.generated| BUS
+    BUS -.-> FUTURE
+```
+
+### Component responsibilities
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Engine | `engine.go` | Subscribe to `recommendation.state.updated`, evaluate rules, deduplicate, publish |
+| Rules | `rules.go` | Map timeline entries and status transitions to alert types |
+| Cache | `cache.go` | Track seen recommendations, fingerprint cooldown, alert ID generation |
+| Events | `events.go` | `AlertGenerated` payload and alert type constants |
+| Health | `health.go` | Alert counters and suppression statistics |
+| Config | `config.go` | `enabled`, `confidence_change_threshold`, `cooldown_seconds` |
+
+### Lifecycle diagram
+
+```mermaid
+flowchart LR
+    subgraph Input["recommendation.state.updated"]
+        TL[Latest Timeline Entry]
+        ST[Current Status]
+        CF[Confidence]
+    end
+
+    subgraph Rules["Alert Rules"]
+        RC[RECOMMENDATION_CREATED]
+        CI[CONFIDENCE_INCREASED]
+        CD[CONFIDENCE_DECREASED]
+        SC[STATUS_CHANGED]
+        EZ[ENTRY_ZONE_REACHED]
+        ER[EXIT_RECOMMENDED]
+        CL[RECOMMENDATION_CLOSED]
+    end
+
+    subgraph Output["alert.generated"]
+        AG[Alert Payload]
+    end
+
+    TL --> Rules
+    ST --> Rules
+    CF --> Rules
+    Rules --> AG
+```
+
+### Alert rules
+
+Alerts are derived from the `latest_timeline_entry` event and first-observation state. Not every `recommendation.state.updated` event produces an alert.
+
+| Alert type | Trigger |
+|------------|---------|
+| `RECOMMENDATION_CREATED` | First observation of a `recommendation_id` |
+| `CONFIDENCE_INCREASED` | Timeline event `Confidence Increased` with delta ≥ `confidence_change_threshold` |
+| `CONFIDENCE_DECREASED` | Timeline event `Confidence Decreased` with delta ≥ `confidence_change_threshold` |
+| `STATUS_CHANGED` | Timeline event `Status Changed` to a non-`ACTIVE` meaningful transition (e.g. `ACTIVE` → `WATCH`) |
+| `ENTRY_ZONE_REACHED` | Timeline event `Status Changed` with `new_value` = `ACTIVE` (e.g. `WATCH` → `ACTIVE`, `CREATED` → `ACTIVE`) |
+| `EXIT_RECOMMENDED` | Timeline event `Exit Recommended` |
+| `RECOMMENDATION_CLOSED` | Timeline event `Closed` |
+
+#### Meaningful transition examples
+
+| Transition | Alert type |
+|------------|------------|
+| New recommendation | `RECOMMENDATION_CREATED` + `ENTRY_ZONE_REACHED` (when status becomes `ACTIVE`) |
+| `ACTIVE` → `WATCH` | `STATUS_CHANGED` |
+| `WATCH` → `ACTIVE` | `ENTRY_ZONE_REACHED` |
+| `ACTIVE` → `EXIT_RECOMMENDED` | `EXIT_RECOMMENDED` |
+| `EXIT_RECOMMENDED` → `CLOSED` | `RECOMMENDATION_CLOSED` |
+| Confidence +0.08 (threshold 0.05) | `CONFIDENCE_INCREASED` |
+| Confidence −0.02 (threshold 0.05) | *(no alert — below threshold)* |
+
+### Deduplication
+
+The cache maintains a fingerprint per alert candidate:
+
+```text
+fingerprint = recommendation_id + alert_type + current_status + reason
+```
+
+Before publishing, the engine checks whether an identical fingerprint was emitted within `cooldown_seconds`. If so, the alert is suppressed and `cooldown_suppressed` is incremented.
+
+### Cooldown
+
+| Setting | Default | Behavior |
+|---------|---------|----------|
+| `cooldown_seconds` | `300` | Minimum interval between identical alert fingerprints |
+
+Cooldown is evaluated against the timeline entry timestamp from the state update. After the cooldown window expires, the same alert type may fire again for the same recommendation (e.g. repeated confidence increases).
+
+### Event contract: `alert.generated`
+
+Published when a meaningful lifecycle change passes rule evaluation and deduplication.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alert_id` | string | yes | Unique alert identifier (`ALT-{YYYYMMDD}-{SYMBOL}-{sequence}`) |
+| `recommendation_id` | string | yes | Stable recommendation identifier |
+| `symbol` | string | yes | Instrument symbol |
+| `timeframe` | string | yes | Bar timeframe |
+| `alert_type` | string | yes | One of the alert type constants |
+| `current_status` | string | yes | Lifecycle status at alert time |
+| `confidence` | float64 | yes | Confidence at alert time |
+| `message` | string | yes | Human-readable alert summary |
+| `reason` | string | yes | Explanation from timeline entry |
+| `generated_at` | time | yes | Alert generation timestamp |
+
+### Configuration
+
+```yaml
+intelligence:
+  alerts:
+    enabled: true
+    confidence_change_threshold: 0.05
+    cooldown_seconds: 300
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable alert engine |
+| `subscriber_buffer` | `256` | Event bus subscriber buffer |
+| `confidence_change_threshold` | `0.05` | Minimum confidence delta for increase/decrease alerts |
+| `cooldown_seconds` | `300` | Deduplication cooldown window |
+
+### Engine lifecycle
+
+#### Startup order
+
+Alert Engine subscribes **before** Recommendation State Manager publishes:
+
+```text
+AlertEngine → RecommendationState → Validation → Recommendation → Opportunity → Scanner → … → Gateway
+```
+
+#### Shutdown order (reverse)
+
+```text
+Gateway → … → Scanner → Opportunity → Recommendation → Validation → RecommendationState → AlertEngine
+```
+
+#### Lifecycle steps
+
+1. `New(cfg, bus, clk)` — validate config, allocate deduplication cache.
+2. `Start(ctx)` — subscribe to `recommendation.state.updated` only, launch consumer goroutine.
+3. Consumer loop — parse state update, evaluate rules, deduplicate, publish `alert.generated`.
+4. `Close()` — cancel context, drain subscription, wait on WaitGroup, close subscription.
+
+### Component diagram
+
+```mermaid
+flowchart LR
+    subgraph alerts_pkg["internal/alerts"]
+        ENG[Engine]
+        CFG[Config]
+        RULES[Rules]
+        CACHE[Cache]
+        EVT[Events]
+        HLTH[Health]
+    end
+
+    ENG --> CFG
+    ENG --> RULES
+    ENG --> CACHE
+    ENG --> EVT
+    ENG --> HLTH
+    RULES --> CACHE
+```
+
+### Event flow
+
+```mermaid
+sequenceDiagram
+    participant RSM as Recommendation State Manager
+    participant BUS as EventBus
+    participant AE as Alert Engine
+    participant RULES as Rules
+    participant CACHE as Cache
+
+    RSM->>BUS: recommendation.state.updated
+    BUS->>AE: recommendation.state.updated
+    AE->>RULES: Evaluate timeline + status
+    RULES-->>AE: Alert candidates
+    loop Each candidate
+        AE->>CACHE: Check fingerprint cooldown
+        alt Cooldown expired or new fingerprint
+            AE->>CACHE: Record fingerprint, generate AlertID
+            AE->>BUS: alert.generated
+        else Suppressed
+            AE->>AE: Increment cooldown_suppressed
+        end
+    end
+```
+
+### Health monitoring
+
+`GET /health/components` includes `alert_engine`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether engine is configured on |
+| `alerts_generated` | Total alerts published |
+| `duplicates_suppressed` | Alerts suppressed as logical duplicates |
+| `confidence_alerts` | Confidence increase/decrease alerts published |
+| `status_alerts` | Status, entry zone, and exit alerts published |
+| `created_alerts` | Recommendation created alerts published |
+| `closed_alerts` | Recommendation closed alerts published |
+| `cooldown_suppressed` | Alerts suppressed by cooldown deduplication |
+| `dropped` | Subscription dropped event count |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Cache | `sync.Mutex` on fingerprints, seen IDs, and ID sequencing |
+| Engine lifecycle | `sync.Mutex` on started/closed flags |
+| Health counters | Updated on each processed candidate |
+| Event processing | Single consumer goroutine |
+| Alert ID generation | Protected under cache write lock |
+
+Rules:
+
+- No lock held during bus publish
+- `Health()` safe for concurrent HTTP probe goroutines
+- Deduplication state is private to the alert engine
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Malformed `recommendation.state.updated` payload | Skip silently; no publish |
+| No meaningful lifecycle change | Skip; no publish |
+| Confidence delta below threshold | Skip confidence alert; other candidates may still fire |
+| Cooldown active for fingerprint | Suppress; increment `cooldown_suppressed` |
+| Bus publish error | Skip; dedup state still updated |
+| Shutdown mid-event | Drain subscription before exit |
+
+### Future integrations
+
+| Consumer | Integration |
+|----------|-------------|
+| Dashboard | Subscribe to `alert.generated`; display real-time alert feed and history |
+| Email | SMTP/webhook adapter consuming `alert.generated` for digest and instant notifications |
+| Push Notifications | Mobile push gateway (FCM/APNs) triggered by `alert.generated` |
+| Telegram | Bot webhook adapter filtering by symbol and alert type |
+| Slack | Incoming webhook or Slack API for channel notifications |
+| WhatsApp | Business API adapter for trader alert delivery |
+
+All notification channels are **future adapters** that subscribe to `alert.generated`. The Alert Engine itself has no provider or channel dependency.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Recommendation created alert | First observation emits `RECOMMENDATION_CREATED` and `ENTRY_ZONE_REACHED` |
+| Status change alert | `ACTIVE` → `WATCH` emits `STATUS_CHANGED` |
+| Confidence increase alert | Delta above threshold emits `CONFIDENCE_INCREASED` |
+| Duplicate suppression | Identical state update does not re-emit alerts |
+| Cooldown behavior | Same fingerprint suppressed within cooldown; fires after expiry |
+| Event publish | State update triggers `alert.generated` with correct source |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Consume only `recommendation.state.updated` | Alerts reflect managed lifecycle, not raw analytics |
+| Publish only `alert.generated` | Clean downstream contract for all notification surfaces |
+| Threshold-gated confidence alerts | Prevents noise from minor confidence fluctuations |
+| Fingerprint + cooldown dedup | Prevents alert storms on repeated identical updates |
+| Multiple alerts per update | Creation + entry zone are distinct meaningful events |
+| No notification providers | Keeps engine focused; channels are future adapters |
+| In-memory dedup state | Phase 6 scope; persistent alert history deferred to future phase |
+
+### Phase 6 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Recommendation State Manager | ✅ Complete |
+| 6 | Alert Engine | ✅ Complete |
+| 7 | Scanner Persistence | Planned |
+| 8 | Query Layer | Planned |
+
