@@ -33,6 +33,7 @@ const (
 	ValidatedRecommendation   Type = "validated.recommendation"
 	RecommendationStateUpdated      Type = "recommendation.state.updated"
 	RecommendationIntelligenceUpdated Type = "recommendation.intelligence.updated"
+	RecommendationQualityUpdated      Type = "recommendation.quality.updated"
 	AlertGenerated                  Type = "alert.generated"
 	ContextEvaluated        Type = "context.evaluated"
 	StrategySignalGenerated Type = "strategy.signal.generated"

@@ -257,6 +257,13 @@ intelligence:
     include_research: true
     include_confidence_breakdown: true
 
+  quality:
+    enabled: true
+    tracking_timeout_minutes: 120
+    excellent_threshold: 0.90
+    good_threshold: 0.75
+    average_threshold: 0.50
+
 api:
   enabled: true
   prefix: /api/v1

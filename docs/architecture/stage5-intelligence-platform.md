@@ -3626,3 +3626,255 @@ Component name: `recommendation_intelligence_engine`
 | 9 | Scanner Persistence | Planned |
 | 10 | Dashboard Layer | Planned |
 
+---
+
+## Stage 5 Phase 9 — Recommendation Quality Engine
+
+Phase 9 introduces the **Recommendation Quality Engine** (`internal/quality`). This engine measures what actually happened after a recommendation was issued. It is strictly an **evaluation engine** — it never generates recommendations, modifies confidence, changes state, alters validation, or fires alerts.
+
+### Purpose
+
+Answer operational questions about recommendation effectiveness:
+
+- Did the recommendation work?
+- How much profit was available?
+- How much adverse movement occurred?
+- How long did it remain valid?
+- Was it an excellent recommendation?
+- How accurate is the platform?
+
+### Architecture
+
+```text
+Recommendation Intelligence
+recommendation.intelligence.updated
+            +
+Completed Candle Events (market.candle.closed)
+            +
+Recommendation State
+recommendation.state.updated
+                    ↓
+Recommendation Quality Engine (internal/quality)
+                    ↓
+recommendation.quality.updated
+```
+
+| File | Responsibility |
+|------|----------------|
+| `engine.go` | Event subscription, routing, lifecycle, publish |
+| `tracker.go` | Per-recommendation active price tracking |
+| `evaluator.go` | Outcome evaluation and report assembly |
+| `statistics.go` | Price statistics, MFE/MAE, historical aggregates |
+| `scoring.go` | Quality score formula and classification |
+| `cache.go` | Thread-safe active/completed/latest caches |
+| `events.go` | Input/output payload types |
+| `config.go` | Runtime configuration |
+| `health.go` | Observability counters |
+| `errors.go` | Structured errors |
+
+### Pipeline
+
+1. `recommendation.intelligence.updated` starts or refreshes a tracker with recommendation metadata.
+2. `market.candle.closed` updates entry/current/high/low prices for matching symbol and timeframe.
+3. `recommendation.state.updated` refreshes lifecycle status; `CLOSED` finalizes the evaluation.
+4. Tracking timeout (configurable) finalizes with `EXPIRED` outcome when no close event arrives.
+5. Engine publishes `recommendation.quality.updated` on each progress update and on completion.
+
+### Lifecycle
+
+| Step | Behavior |
+|------|----------|
+| `New(cfg, bus, clk)` | Validate config; allocate tracker registry, evaluator, cache |
+| `Start(ctx)` | Subscribe to intelligence, candle, and state events; launch consumer |
+| Event loop | Route events; update trackers; evaluate; publish |
+| `Close()` | Cancel context; drain subscription; wait for goroutine |
+
+### Tracker
+
+One active tracker per `RecommendationID` maintains:
+
+| Field | Description |
+|-------|-------------|
+| Entry time | Recommendation issue time |
+| Entry price | First matching candle close |
+| Current price | Latest candle close |
+| Highest / lowest | Running OHLC extremes |
+| Holding duration | Elapsed time since entry |
+| MFE / MAE | Maximum favorable / adverse excursion |
+| Status | Latest lifecycle status |
+
+Tracking stops when status becomes `CLOSED` or tracking timeout expires.
+
+### Evaluation flow
+
+```mermaid
+flowchart TD
+    INT[recommendation.intelligence.updated] --> START[Start / refresh tracker]
+    CANDLE[market.candle.closed] --> PRICE[Update price statistics]
+    STATE[recommendation.state.updated] --> STATUS[Update status]
+    STATUS -->|CLOSED| FINAL[Finalize report]
+    PRICE --> TIMEOUT{Timeout exceeded?}
+    TIMEOUT -->|yes| EXPIRE[Finalize as EXPIRED]
+    TIMEOUT -->|no| PROGRESS[Publish progress report]
+    START --> PROGRESS
+    FINAL --> PUB[recommendation.quality.updated]
+    EXPIRE --> PUB
+    PROGRESS --> PUB
+```
+
+### Price tracking
+
+- Uses **completed candle events only** — never raw ticks.
+- Entry price is the close of the first matching candle after tracking starts.
+- Symbol must match; timeframe must match when both sides specify one.
+- Deterministic and replay-compatible with backtest and walk-forward pipelines.
+
+### MFE / MAE
+
+For long-direction recommendations (BUY / STRONG_BUY):
+
+| Metric | Formula |
+|--------|---------|
+| MFE | `(highest_price - entry_price) / entry_price` |
+| MAE | `(entry_price - lowest_price) / entry_price` |
+| Maximum return | Equal to MFE |
+| Maximum drawdown | Equal to MAE |
+| Return % | `(current_price - entry_price) / entry_price` |
+
+### Outcome evaluation
+
+| Outcome | Rule |
+|---------|------|
+| `SUCCESS` | Return % ≥ `success_return_pct` (default 0.5%) |
+| `FAILED` | Return % ≤ `failure_return_pct` (default -0.5%) |
+| `NEUTRAL` | Return between failure and success thresholds |
+| `EXPIRED` | Tracking timeout reached before `CLOSED` |
+
+### Quality score
+
+Range: **0.0 → 1.0**
+
+```
+returnFactor   = clamp((return_pct + 0.05) / 0.10, 0, 1)
+mfeFactor      = clamp(mfe / 0.05, 0, 1)
+maePenalty     = clamp(1 - mae / 0.03, 0, 1)
+durationFactor = piecewise (peak 5–90 minutes)
+confidenceFactor = confidence
+levelFactor    = STRONG_BUY=1.0, BUY=0.85, WATCH=0.50, AVOID=0.20
+outcomeFactor  = SUCCESS=1.0, NEUTRAL=0.5, EXPIRED=0.3, FAILED=0.0
+
+quality_score = 0.30*returnFactor + 0.20*mfeFactor + 0.15*maePenalty
+              + 0.10*durationFactor + 0.10*confidenceFactor
+              + 0.05*levelFactor + 0.10*outcomeFactor
+```
+
+### Classification
+
+| Classification | Threshold |
+|----------------|-----------|
+| `EXCELLENT` | quality_score ≥ excellent_threshold (0.90) |
+| `GOOD` | quality_score ≥ good_threshold (0.75) |
+| `AVERAGE` | quality_score ≥ average_threshold (0.50) |
+| `POOR` | quality_score > 0 below average |
+| `FAILED` | outcome is `FAILED` |
+
+### Configuration
+
+```yaml
+intelligence:
+  quality:
+    enabled: true
+    tracking_timeout_minutes: 120
+    excellent_threshold: 0.90
+    good_threshold: 0.75
+    average_threshold: 0.50
+```
+
+### Health
+
+Component name: `recommendation_quality_engine`
+
+| Detail key | Description |
+|------------|-------------|
+| `recommendations_tracked` | Total trackers started |
+| `recommendations_completed` | Total evaluations finalized |
+| `successful` | Completed with SUCCESS outcome |
+| `failed` | Completed with FAILED outcome |
+| `expired` | Completed with EXPIRED outcome |
+| `average_return` | Mean return % across completed reports |
+| `average_quality_score` | Mean quality score across completed reports |
+| `average_tracking_minutes` | Mean holding duration in minutes |
+| `active_trackers` | Currently tracking |
+| `completed_reports` | Reports in completed cache |
+| `dropped_events` | Dropped EventBus messages |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Engine goroutine | Single consumer |
+| Tracker registry | `sync.RWMutex` |
+| Cache | `sync.RWMutex` |
+| Health counters | Updated from consumer goroutine |
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Engine disabled | No subscription; graceful no-op |
+| Malformed payload | Skip silently; no publish |
+| Missing candle data | Tracker waits for first matching candle |
+| EventBus backpressure | `dropped_events` counter incremented |
+
+### Performance considerations
+
+- Candle-driven updates only — dramatically lower CPU and memory than tick subscriptions.
+- O(active trackers) per candle event; typical intraday cardinality is small.
+- Incremental MFE/MAE from running high/low — no historical recomputation.
+
+### Backtest compatibility
+
+Timeout checks use **event timestamps**, not wall clock. Replay and backtest engines produce identical quality reports for the same event sequence.
+
+### Replay compatibility
+
+Deterministic entry from first candle close, deterministic timeout from event time, immutable published reports.
+
+### Future learning engine integration
+
+`recommendation.quality.updated` reports provide labeled outcomes (SUCCESS/FAILED/EXPIRED), quality scores, and MFE/MAE features for a future machine-learning feedback loop. The quality engine does not train models — it only emits evaluation events.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Recommendation tracking | Tracker starts; entry price from candle |
+| Recommendation close | CLOSED state finalizes report |
+| Tracking timeout | EXPIRED outcome after timeout |
+| Successful recommendation | SUCCESS outcome on positive return |
+| Failed recommendation | FAILED outcome on negative return |
+| Expired recommendation | EXPIRED on timeout |
+| Positive / negative return | Price statistics |
+| MFE / MAE calculation | Excursion metrics |
+| Quality score | Score in 0–1 range |
+| Classification | Threshold labels |
+| Health metrics | Component and counters |
+| Event publishing | `recommendation.quality.updated` |
+| Thread safety | Concurrent tracker creation |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Candle-only pricing | Deterministic, replay-safe, low resource usage |
+| Read-only evaluation | Never mutates upstream intelligence or state |
+| Event-time timeouts | Backtest and replay parity |
+| Progress + completion publish | Downstream dashboards can stream in-flight quality |
+| Documented score formula | Auditable, tunable, learning-engine ready |
+
+### Phase 9 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 9 | Recommendation Quality Engine | ✅ Complete |
+

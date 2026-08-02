@@ -14,6 +14,7 @@ type IntelligenceConfig struct {
 	RecommendationState RecommendationStateConfig `mapstructure:"recommendation_state"`
 	Alerts              AlertsConfig              `mapstructure:"alerts"`
 	Explanation         ExplanationConfig         `mapstructure:"explanation"`
+	Quality             QualityConfig             `mapstructure:"quality"`
 }
 
 // OpportunityConfig controls the opportunity ranking engine.
