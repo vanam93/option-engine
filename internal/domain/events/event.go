@@ -27,6 +27,7 @@ const (
 	WalkForwardCompleted    Type = "walkforward.completed"
 	MonteCarloCompleted     Type = "montecarlo.completed"
 	ResearchUpdated         Type = "research.updated"
+	ScannerUpdated          Type = "scanner.updated"
 	ContextEvaluated        Type = "context.evaluated"
 	StrategySignalGenerated Type = "strategy.signal.generated"
 	DecisionMade            Type = "decision.made"

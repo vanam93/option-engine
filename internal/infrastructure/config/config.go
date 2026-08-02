@@ -33,6 +33,7 @@ type Config struct {
 	WalkForward  WalkForwardConfig  `mapstructure:"walkforward"`
 	MonteCarlo   MonteCarloConfig   `mapstructure:"montecarlo"`
 	Research     ResearchConfig     `mapstructure:"research"`
+	Scanner      ScannerConfig      `mapstructure:"scanner"`
 }
 
 type HTTPConfig struct {
@@ -422,6 +423,16 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("research.export_directory", "./reports")
 	v.SetDefault("research.formats", []string{"json", "csv"})
 	v.SetDefault("research.subscriber_buffer", 256)
+
+	v.SetDefault("scanner.enabled", true)
+	v.SetDefault("scanner.symbols", []string{"NIFTY"})
+	v.SetDefault("scanner.subscriber_buffer", 256)
+	v.SetDefault("scanner.min_confidence", 0.5)
+	v.SetDefault("scanner.scanners.ema", true)
+	v.SetDefault("scanner.scanners.rsi", true)
+	v.SetDefault("scanner.scanners.macd", true)
+	v.SetDefault("scanner.scanners.trend", true)
+	v.SetDefault("scanner.scanners.ranking", true)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.

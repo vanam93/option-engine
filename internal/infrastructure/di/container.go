@@ -39,6 +39,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
 	"github.com/vanam-gangireddy/option-engine/internal/research"
+	"github.com/vanam-gangireddy/option-engine/internal/scanner"
 	"github.com/vanam-gangireddy/option-engine/internal/walkforward"
 )
 
@@ -73,6 +74,7 @@ type Container struct {
 	WalkForwardEngine  *walkforward.Engine
 	MonteCarloEngine   *montecarlo.Engine
 	ResearchEngine     *research.Engine
+	ScannerEngine      *scanner.Engine
 	BacktestEngine     *backtest.Engine
 	Postgres           *postgres.Pool
 	HTTPServer         *http.Server
@@ -309,6 +311,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("research engine: %w", err)
 	}
 
+	scannerCfg, err := config.BuildScannerEngineConfig(cfg.ScannerEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("scanner config: %w", err)
+	}
+	scannerEngine, err := scanner.New(scannerCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("scanner engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -329,6 +340,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, walkForwardEngine)
 	healthReporters = append(healthReporters, monteCarloEngine)
 	healthReporters = append(healthReporters, researchEngine)
+	healthReporters = append(healthReporters, scannerEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -369,6 +381,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		WalkForwardEngine:  walkForwardEngine,
 		MonteCarloEngine:   monteCarloEngine,
 		ResearchEngine:     researchEngine,
+		ScannerEngine:      scannerEngine,
 		BacktestEngine:     backtestEngine,
 		Postgres:           pool,
 		HTTPServer:         httpServer,
@@ -399,6 +412,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
 				return err
 			}
+		}
+	}
+	if c.ScannerEngine != nil {
+		if err := c.ScannerEngine.Start(ctx); err != nil {
+			return err
 		}
 	}
 	if c.ResearchEngine != nil {
@@ -513,6 +531,9 @@ func (c *Container) Close() {
 	}
 	if c.ResearchEngine != nil {
 		_ = c.ResearchEngine.Close()
+	}
+	if c.ScannerEngine != nil {
+		_ = c.ScannerEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()

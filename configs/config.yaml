@@ -201,3 +201,14 @@ research:
   formats:
     - json
     - csv
+
+scanner:
+  enabled: true
+  symbols:
+    - NIFTY
+  scanners:
+    ema: true
+    rsi: true
+    macd: true
+    trend: true
+    ranking: true
