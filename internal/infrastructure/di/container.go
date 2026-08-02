@@ -36,6 +36,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/optimization"
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
+	"github.com/vanam-gangireddy/option-engine/internal/walkforward"
 )
 
 // Container holds all wired dependencies.
@@ -65,6 +66,7 @@ type Container struct {
 	PerformanceEngine   *performance.Engine
 	OptimizationEngine  *optimization.Engine
 	ExperimentEngine    *experiments.Engine
+	WalkForwardEngine   *walkforward.Engine
 	BacktestEngine      *backtest.Engine
 	Postgres            *postgres.Pool
 	HTTPServer       *http.Server
@@ -263,6 +265,19 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("experiment engine: %w", err)
 	}
 
+	walkForwardCfg, err := config.BuildWalkForwardEngineConfig(cfg.WalkForwardEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("walkforward config: %w", err)
+	}
+	var walkForwardRunner experiments.BacktestRunner
+	if backtestEngine != nil {
+		walkForwardRunner = experiments.NewSharedEngineRunner(backtestEngine)
+	}
+	walkForwardEngine, err := walkforward.New(walkForwardCfg, bus, clk, walkForwardRunner)
+	if err != nil {
+		return nil, fmt.Errorf("walkforward engine: %w", err)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -285,6 +300,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, performanceEngine)
 	healthReporters = append(healthReporters, optimizationEngine)
 	healthReporters = append(healthReporters, experimentEngine)
+	healthReporters = append(healthReporters, walkForwardEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -321,6 +337,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		PerformanceEngine:   performanceEngine,
 		OptimizationEngine:  optimizationEngine,
 		ExperimentEngine:    experimentEngine,
+		WalkForwardEngine:   walkForwardEngine,
 		BacktestEngine:      backtestEngine,
 		Postgres:            pool,
 		HTTPServer:       httpServer,
@@ -351,6 +368,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
 				return err
 			}
+		}
+	}
+	if c.WalkForwardEngine != nil {
+		if err := c.WalkForwardEngine.Start(ctx); err != nil {
+			return err
 		}
 	}
 	if c.ExperimentEngine != nil {
@@ -441,6 +463,9 @@ func (c *Container) Close() {
 	}
 	if c.ExperimentEngine != nil {
 		_ = c.ExperimentEngine.Close()
+	}
+	if c.WalkForwardEngine != nil {
+		_ = c.WalkForwardEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()

@@ -30,6 +30,7 @@ type Config struct {
 	Backtest     BacktestConfig     `mapstructure:"backtest"`
 	Optimization OptimizationConfig `mapstructure:"optimization"`
 	Experiments  ExperimentsConfig  `mapstructure:"experiments"`
+	WalkForward  WalkForwardConfig  `mapstructure:"walkforward"`
 }
 
 type HTTPConfig struct {
@@ -398,6 +399,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("experiments.parameter_ranges.ema_fast", []int{5, 9, 12})
 	v.SetDefault("experiments.parameter_ranges.ema_slow", []int{21, 34, 50})
 	v.SetDefault("experiments.parameter_ranges.rsi_period", []int{14, 21})
+
+	v.SetDefault("walkforward.enabled", false)
+	v.SetDefault("walkforward.train_window_days", 30)
+	v.SetDefault("walkforward.validation_window_days", 10)
+	v.SetDefault("walkforward.step_days", 10)
+	v.SetDefault("walkforward.subscriber_buffer", 256)
+	v.SetDefault("walkforward.parallel_workers", 2)
+	v.SetDefault("walkforward.max_concurrent_runs", 2)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.

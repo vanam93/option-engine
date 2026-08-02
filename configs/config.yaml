@@ -182,3 +182,9 @@ experiments:
     rsi_period:
       - 14
       - 21
+
+walkforward:
+  enabled: false
+  train_window_days: 30
+  validation_window_days: 10
+  step_days: 10

@@ -24,6 +24,7 @@ const (
 	PerformanceUpdated       Type = "performance.updated"
 	OptimizationUpdated      Type = "optimization.updated"
 	ExperimentCompleted      Type = "experiment.completed"
+	WalkForwardCompleted     Type = "walkforward.completed"
 	ContextEvaluated         Type = "context.evaluated"
 	StrategySignalGenerated  Type = "strategy.signal.generated"
 	DecisionMade             Type = "decision.made"
