@@ -32,6 +32,7 @@ type Config struct {
 	Experiments  ExperimentsConfig  `mapstructure:"experiments"`
 	WalkForward  WalkForwardConfig  `mapstructure:"walkforward"`
 	MonteCarlo   MonteCarloConfig   `mapstructure:"montecarlo"`
+	Research     ResearchConfig     `mapstructure:"research"`
 }
 
 type HTTPConfig struct {
@@ -416,6 +417,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("montecarlo.random_seed", seed)
 	v.SetDefault("montecarlo.subscriber_buffer", 256)
 	v.SetDefault("montecarlo.ruin_drawdown_pct", 1.0)
+
+	v.SetDefault("research.enabled", true)
+	v.SetDefault("research.export_directory", "./reports")
+	v.SetDefault("research.formats", []string{"json", "csv"})
+	v.SetDefault("research.subscriber_buffer", 256)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.

@@ -1257,3 +1257,235 @@ internal/montecarlo/
 | 5 | Monte Carlo Simulation | Complete | `walkforward.completed` | `montecarlo.completed` |
 | 6 | Report Export | Planned | `montecarlo.completed` + upstream events | CSV/JSON reports |
 
+## 57. Research Repository
+
+The Research Repository (Phase 6) is the permanent storage layer for the Stage 4 Research Platform. It persists completed research artifacts from the optimization → walk-forward → Monte Carlo pipeline into PostgreSQL and generates reusable reports from stored data.
+
+### Design principles
+
+| Rule | Enforcement |
+|------|-------------|
+| PostgreSQL as source of truth | All artifacts written via `Repository` interface |
+| No duplicate database | Reuses existing `postgres.Pool` and pgx connection |
+| Event-only ingestion | Subscribes to `optimization.updated`, `walkforward.completed`, `montecarlo.completed` |
+| Reports from DB | `ReportGenerator` loads `ResearchBundle` from PostgreSQL, not in-memory caches |
+| Lightweight runtime cache | `Cache` tracks active report generation only |
+| Append-only events | Publishes `research.updated` without mutating upstream payloads |
+
+### Package ownership
+
+| Package | Role |
+|---------|------|
+| `internal/research` | Repository, report generation, export, orchestration |
+| `internal/infrastructure/config/research.go` | Configuration mapping |
+| `deployments/postgres/002_research.sql` | Deployment migration DDL |
+
+## 58. Persistent Research Storage
+
+Research artifacts are stored in PostgreSQL immediately upon event receipt. In-memory engine caches from upstream phases (optimization, walk-forward, Monte Carlo) are not used as the persistence layer.
+
+### Storage flow
+
+```text
+optimization.updated     → UpsertExperiment + InsertOptimizationResult
+walkforward.completed    → UpsertExperiment + InsertWalkForwardResult
+montecarlo.completed     → EnsureExperiment + InsertMonteCarloResult → Generate report
+```
+
+Schema is applied idempotently via `EnsureSchema()` on engine start using embedded `schema.sql`.
+
+## 59. PostgreSQL Data Model
+
+| Table | Purpose | Key columns |
+|-------|---------|-------------|
+| `research_experiments` | Experiment metadata | `experiment_id`, `strategy`, `symbol`, `timeframe`, `parameters` (JSONB) |
+| `optimization_results` | Optimization evaluations | `experiment_id`, `score`, `win_rate`, `expectancy`, `profit_factor`, `drawdown`, `metrics` (JSONB) |
+| `walkforward_results` | Walk-forward windows | `walkforward_id`, `experiment_id`, `train_score`, `validation_score`, `parameter_set` (JSONB) |
+| `montecarlo_results` | Monte Carlo batches | `simulation_id`, `confidence_interval` (JSONB), `probability_of_profit`, `risk_of_ruin`, `distribution` (JSONB) |
+| `research_reports` | Export tracking | `research_id`, `experiment_id`, `version`, `json_path`, `csv_path` |
+
+Indexes on `strategy`, `symbol`, `timeframe`, and `experiment_id` support query filters.
+
+## 60. Repository Layer
+
+```text
+Repository (interface)
+    ├── EnsureSchema
+    ├── EnsureExperiment / UpsertExperiment
+    ├── InsertOptimizationResult
+    ├── InsertWalkForwardResult
+    ├── InsertMonteCarloResult
+    ├── GetExperiment / ListExperiments
+    ├── GetResearchBundle
+    ├── InsertResearchReport
+    └── CountEntries
+
+PostgresRepository (implementation)
+    └── uses pgxpool.Pool via postgres.Pool.Underlying()
+```
+
+The repository interface enables future storage backends without changing engine or export logic.
+
+## 61. Result Versioning
+
+Each report generation increments `version` per `experiment_id`:
+
+```text
+version ← LatestReportVersion(experiment_id) + 1
+filename ← {experiment_id}_v{version}.{json|csv}
+```
+
+Prior report rows remain in `research_reports` for audit and comparison. Version is included in `UnifiedReport` and export filenames.
+
+## 62. Experiment Metadata
+
+`research_experiments` stores correlation metadata extracted from event payloads:
+
+- **From `optimization.updated`**: `strategy`, `symbol`, `timeframe`, `parameters`, `experiment_id` from serialized parameters
+- **From `walkforward.completed`**: `experiment_id`, `best_parameters` as JSONB
+- **From `montecarlo.completed`**: `EnsureExperiment` creates placeholder row if missing (no overwrite of existing metadata)
+
+Queries support filtering by `experiment_id`, `strategy`, `symbol`, and `timeframe`.
+
+## 63. Report Generation
+
+`ReportGenerator.Generate()` loads a `ResearchBundle` from PostgreSQL and builds a `UnifiedReport` with:
+
+- All optimization, walk-forward, and Monte Carlo rows for the experiment
+- `ReportSummary` with best score, latest validation, probability of profit, risk of ruin
+
+Report generation is triggered on `montecarlo.completed` (end of research pipeline).
+
+## 64. Export Pipeline
+
+```text
+UnifiedReport (from PostgreSQL)
+        ↓
+Exporter interface
+    ├── JSONExporter → {experiment_id}_v{version}.json
+    └── CSVExporter  → {experiment_id}_v{version}.csv
+        ↓
+research_reports row (paths + version)
+        ↓
+research.updated event
+```
+
+Exporter interfaces are format-specific; HTML/PDF exporters can be added without changing repository or engine logic.
+
+### Configuration
+
+```yaml
+research:
+  enabled: true
+  export_directory: ./reports
+  formats:
+    - json
+    - csv
+```
+
+## 65. Dashboard Integration
+
+`research.updated` provides dashboard-ready payloads:
+
+| Field | Use |
+|-------|-----|
+| `research_id` | Report identifier |
+| `experiment_id` | Experiment correlation |
+| `strategy` | Strategy filter/display |
+| `metrics` | Summary headline cards (best score, validation, profit probability, risk of ruin) |
+| `report_location` | Links to JSON/CSV files for download or API proxy |
+
+Future HTTP endpoints can query `ListExperiments` and `GetResearchBundle` without accessing upstream engine caches.
+
+## 66. Future ML Integration
+
+Machine learning extensions (Phase 7+) will consume persisted research data:
+
+| Extension | Integration point |
+|-----------|-------------------|
+| Feature extraction | `optimization_results.metrics` and `walkforward_results.performance_metrics` JSONB |
+| Training datasets | `GetResearchBundle` cross-experiment queries |
+| Model scoring | New event type (append-only) consuming `research.updated` |
+| Hyperparameter feedback | `research_experiments.parameters` JSONB as feature vectors |
+
+PostgreSQL JSONB columns and versioned reports provide a stable foundation without architectural changes to upstream engines.
+
+## 67. Phase 6 — Research Repository & Reporting Engine
+
+### Responsibility
+
+- Subscribe to `optimization.updated`, `walkforward.completed`, `montecarlo.completed`.
+- Persist all research artifacts to PostgreSQL.
+- Generate unified JSON and CSV reports from stored data.
+- Publish `research.updated` with report locations and summary metrics.
+
+### Pipeline
+
+```text
+optimization.updated ──┐
+walkforward.completed ─┼→ Research Engine → PostgreSQL → Report Generator → research.updated
+montecarlo.completed ──┘
+```
+
+### Lifecycle
+
+1. Research engine starts **before** Monte Carlo engine (subscribes first).
+2. On `Start`, apply schema via `EnsureSchema()`.
+3. On each input event, persist artifact to PostgreSQL.
+4. On `montecarlo.completed`, generate report from DB, export files, publish `research.updated`.
+5. On shutdown: cancel context, drain subscription, wait on WaitGroup.
+
+### Event payload (`research.updated`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `research_id` | string | Generated report identifier |
+| `experiment_id` | string | Source experiment batch |
+| `strategy` | string | Strategy name |
+| `metrics` | object | `ReportSummary` headline metrics |
+| `report_location` | object | `{ json_path, csv_path }` |
+| `timestamp` | time | Completion timestamp |
+
+### Health
+
+`GET /health/components` includes `research_engine` with `repository_entries`, `reports_generated`, `exports_completed`, `export_failures`, `postgres_writes`, `postgres_read_latency_ms`.
+
+### Package layout
+
+```text
+internal/research/
+├── engine.go       # Lifecycle, event consumption, orchestration
+├── repository.go   # Repository interface
+├── postgres.go     # PostgreSQL implementation
+├── models.go       # Domain models and bundle types
+├── reports.go      # ReportGenerator
+├── exporter.go     # JSON/CSV exporters
+├── config.go       # Engine configuration
+├── cache.go        # Active report generation tracking
+├── events.go       # research.updated payload
+├── health.go       # Health reporter
+├── errors.go       # Structured errors
+└── schema.sql      # Embedded DDL
+```
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Repository insert | Row stored in PostgreSQL |
+| Repository read | Persisted bundle returned |
+| JSON export | Valid JSON report file |
+| CSV export | Correct CSV rows |
+| `research.updated` | Event published with report locations |
+
+## 68. Updated Stage 4 Roadmap
+
+| Phase | Name | Status | Consumes | Produces |
+|-------|------|--------|----------|----------|
+| 1 | Backtest Replay | Complete | Historical data | `MarketDataReceived` |
+| 2 | Strategy Optimization | Complete | `performance.updated` | `optimization.updated` |
+| 3 | Experiment & Parameter Sweep | Complete | Config grid + replay | `experiment.completed` |
+| 4 | Walk-Forward Analysis | Complete | Rolling replay windows | `walkforward.completed` |
+| 5 | Monte Carlo Simulation | Complete | `walkforward.completed` | `montecarlo.completed` |
+| 6 | Research Repository & Reporting | Complete | Pipeline events | `research.updated` + PostgreSQL + exports |
+
