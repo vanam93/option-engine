@@ -1,20 +1,23 @@
-package query
+package api
 
 import "github.com/gin-gonic/gin"
 
-// RegisterRoutes mounts query API routes on the given router group.
-func RegisterRoutes(group *gin.RouterGroup, api *API) {
-	if api == nil || !api.enabled() {
+// RegisterRoutes mounts Intelligence API routes on the given router group.
+func RegisterRoutes(group *gin.RouterGroup, cfg Config, repo *Repository) {
+	cfg = cfg.withDefaults()
+	if !cfg.Enabled || repo == nil {
 		return
 	}
-	h := NewHandlers(api)
+
+	group.Use(TimeoutMiddleware(cfg.ReadTimeout))
+
+	h := NewHandlers(cfg, repo)
 
 	group.GET("/recommendations", h.ListRecommendations)
 	group.GET("/recommendations/:id/timeline", h.GetTimeline)
 	group.GET("/recommendations/:id", h.GetRecommendation)
 	group.GET("/alerts", h.ListAlerts)
 	group.GET("/opportunities", h.GetOpportunities)
-	group.GET("/scanner", h.GetScanner)
 	group.GET("/performance", h.GetPerformance)
 	group.GET("/optimization", h.GetOptimization)
 	group.GET("/research/:id", h.GetResearch)

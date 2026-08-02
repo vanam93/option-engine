@@ -251,6 +251,8 @@ intelligence:
     confidence_change_threshold: 0.05
     cooldown_seconds: 300
 
-query:
+api:
   enabled: true
-  api_prefix: /api/v1
+  prefix: /api/v1
+  read_timeout: 30s
+  write_timeout: 30s

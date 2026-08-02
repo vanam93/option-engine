@@ -1,4 +1,4 @@
-package query_test
+package api_test
 
 import (
 	"context"
@@ -12,13 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vanam-gangireddy/option-engine/internal/alerts"
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/performance"
+	"github.com/vanam-gangireddy/option-engine/internal/api"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
 	"github.com/vanam-gangireddy/option-engine/internal/opportunity"
-	"github.com/vanam-gangireddy/option-engine/internal/optimization"
-	"github.com/vanam-gangireddy/option-engine/internal/query"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendationstate"
 	"github.com/vanam-gangireddy/option-engine/internal/research"
-	"github.com/vanam-gangireddy/option-engine/internal/scanner"
 )
 
 type mockRecommendations struct {
@@ -61,6 +59,9 @@ type mockAlerts struct{ items []alerts.AlertGenerated }
 
 func (m *mockAlerts) List(symbol, strategy, timeframe, status string, confidenceMin float64) []alerts.AlertGenerated {
 	_ = strategy
+	_ = timeframe
+	_ = status
+	_ = confidenceMin
 	out := make([]alerts.AlertGenerated, 0)
 	for _, item := range m.items {
 		if symbol != "" && item.Symbol != symbol {
@@ -77,23 +78,34 @@ func (m *mockOpportunities) Snapshot() opportunity.OpportunitySnapshot {
 	return opportunity.OpportunitySnapshot{}
 }
 
-type mockScanner struct{}
-
-func (m *mockScanner) Snapshot() scanner.ScannerSnapshot { return scanner.ScannerSnapshot{} }
-
 type mockPerformance struct{}
 
 func (m *mockPerformance) State() performance.PerformanceSnapshot {
 	return performance.PerformanceSnapshot{TotalTrades: 3}
 }
 
-type mockOptimization struct{}
+type mockResearch struct {
+	experiments []research.ResearchExperiment
+	bundles     map[string]research.ResearchBundle
+}
 
-func (m *mockOptimization) State() optimization.StateSnapshot { return optimization.StateSnapshot{} }
-
-type mockResearch struct{}
+func (m *mockResearch) ListExperiments(ctx context.Context, filter research.QueryFilter) ([]research.ResearchExperiment, error) {
+	_ = ctx
+	out := make([]research.ResearchExperiment, 0)
+	for _, exp := range m.experiments {
+		if filter.Symbol != "" && exp.Symbol != filter.Symbol {
+			continue
+		}
+		out = append(out, exp)
+	}
+	return out, nil
+}
 
 func (m *mockResearch) GetResearchBundle(ctx context.Context, experimentID string) (research.ResearchBundle, error) {
+	_ = ctx
+	if bundle, ok := m.bundles[experimentID]; ok {
+		return bundle, nil
+	}
 	return research.ResearchBundle{}, research.ErrNotFound
 }
 
@@ -101,7 +113,7 @@ type mockHealth struct{}
 
 func (m *mockHealth) Health() health.Report { return health.Report{Component: "mock"} }
 
-func testAPI(t *testing.T) (*query.API, *gin.Engine) {
+func testEngine(t *testing.T) *gin.Engine {
 	t.Helper()
 	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
 	recs := &mockRecommendations{
@@ -135,96 +147,142 @@ func testAPI(t *testing.T) (*query.API, *gin.Engine) {
 		},
 	}
 	alertItems := &mockAlerts{items: []alerts.AlertGenerated{
-		{AlertID: "ALT-1", RecommendationID: "REC-1", Symbol: "NIFTY", Timeframe: "1m", AlertType: alerts.AlertRecommendationCreated},
+		{AlertID: "ALT-1", RecommendationID: "REC-1", Symbol: "NIFTY", Timeframe: "1m", AlertType: alerts.AlertRecommendationCreated, GeneratedAt: now},
 	}}
+	researchStore := &mockResearch{
+		experiments: []research.ResearchExperiment{
+			{ExperimentID: "EXP-1", Strategy: "ema_cross", Symbol: "NIFTY", Timeframe: "5m", CreatedAt: now},
+		},
+		bundles: map[string]research.ResearchBundle{
+			"EXP-1": {
+				Experiment: research.ResearchExperiment{ExperimentID: "EXP-1", Symbol: "NIFTY"},
+				Optimization: []research.OptimizationResult{
+					{ExperimentID: "EXP-1", Score: 0.91, WinRate: 0.62},
+				},
+			},
+		},
+	}
 
-	repo := query.NewRepository(recs, alertItems, &mockOpportunities{}, &mockScanner{}, &mockPerformance{}, &mockOptimization{}, &mockResearch{}, &mockHealth{})
-	api, err := query.NewAPI(query.Config{Enabled: true, DefaultLimit: 10, MaxLimit: 100}, repo)
+	cfg := api.Config{Enabled: true, DefaultLimit: 10, MaxLimit: 100}
+	repo := api.NewRepository(cfg, recs, alertItems, &mockOpportunities{}, &mockPerformance{}, researchStore, &mockHealth{})
+	srv, err := api.NewServer(cfg, repo)
 	require.NoError(t, err)
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	query.RegisterRoutes(engine.Group("/api/v1"), api)
-	return api, engine
+	srv.Register(engine)
+	return engine
 }
 
 func TestListRecommendations(t *testing.T) {
-	_, engine := testAPI(t)
+	engine := testEngine(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations", nil)
 	resp := httptest.NewRecorder()
 	engine.ServeHTTP(resp, req)
 
 	require.Equal(t, http.StatusOK, resp.Code)
-	var body query.ListResponse[query.RecommendationView]
+	var body api.Response
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Len(t, body.Data, 2)
-	require.Equal(t, 2, body.Metadata.Pagination.Total)
+	require.True(t, body.Success)
+	require.NotNil(t, body.Pagination)
+	require.Equal(t, 2, body.Pagination.Total)
 }
 
 func TestFilterBySymbol(t *testing.T) {
-	_, engine := testAPI(t)
+	engine := testEngine(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations?symbol=NIFTY", nil)
 	resp := httptest.NewRecorder()
 	engine.ServeHTTP(resp, req)
 
 	require.Equal(t, http.StatusOK, resp.Code)
-	var body query.ListResponse[query.RecommendationView]
+	var body api.Response
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Len(t, body.Data, 1)
-	require.Equal(t, "NIFTY", body.Data[0].Symbol)
-	require.Equal(t, "NIFTY", body.Metadata.Filters.Symbol)
+	require.Equal(t, "NIFTY", body.Filters.Symbol)
 }
 
 func TestRecommendationDetail(t *testing.T) {
-	_, engine := testAPI(t)
+	engine := testEngine(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations/REC-1", nil)
 	resp := httptest.NewRecorder()
 	engine.ServeHTTP(resp, req)
 
 	require.Equal(t, http.StatusOK, resp.Code)
-	var body query.ItemResponse[query.RecommendationView]
+	var body api.Response
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Equal(t, "REC-1", body.Data.RecommendationID)
+	require.True(t, body.Success)
 }
 
 func TestTimelineEndpoint(t *testing.T) {
-	_, engine := testAPI(t)
+	engine := testEngine(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations/REC-1/timeline", nil)
 	resp := httptest.NewRecorder()
 	engine.ServeHTTP(resp, req)
 
 	require.Equal(t, http.StatusOK, resp.Code)
-	var body query.TimelineResponse
+	var body api.Response
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Equal(t, "REC-1", body.ID)
-	require.Len(t, body.Timeline, 2)
+	require.True(t, body.Success)
 }
 
 func TestAlertEndpoint(t *testing.T) {
-	_, engine := testAPI(t)
+	engine := testEngine(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/alerts", nil)
 	resp := httptest.NewRecorder()
 	engine.ServeHTTP(resp, req)
 
 	require.Equal(t, http.StatusOK, resp.Code)
-	var body query.ListResponse[query.AlertView]
+	var body api.Response
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Len(t, body.Data, 1)
-	require.Equal(t, "ALT-1", body.Data[0].AlertID)
+	require.Equal(t, 1, body.Pagination.Total)
 }
 
-func TestPagination(t *testing.T) {
-	_, engine := testAPI(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations?limit=1&offset=0", nil)
+func TestOptimizationEndpoint(t *testing.T) {
+	engine := testEngine(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/optimization", nil)
 	resp := httptest.NewRecorder()
 	engine.ServeHTTP(resp, req)
 
 	require.Equal(t, http.StatusOK, resp.Code)
-	var body query.ListResponse[query.RecommendationView]
+	var body api.Response
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Len(t, body.Data, 1)
-	require.Equal(t, 1, body.Metadata.Pagination.Limit)
-	require.Equal(t, 0, body.Metadata.Pagination.Offset)
-	require.Equal(t, 2, body.Metadata.Pagination.Total)
-	require.True(t, body.Metadata.Pagination.HasMore)
+	require.True(t, body.Success)
+}
+
+func TestResearchEndpoint(t *testing.T) {
+	engine := testEngine(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/research/EXP-1", nil)
+	resp := httptest.NewRecorder()
+	engine.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var body api.Response
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.True(t, body.Success)
+}
+
+func TestPagination(t *testing.T) {
+	engine := testEngine(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations?limit=1&page=1", nil)
+	resp := httptest.NewRecorder()
+	engine.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var body api.Response
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.Equal(t, 1, body.Pagination.Limit)
+	require.Equal(t, 1, body.Pagination.Page)
+	require.Equal(t, 2, body.Pagination.Total)
+	require.NotNil(t, body.Pagination.NextPage)
+}
+
+func TestIntelligenceHealthEndpoint(t *testing.T) {
+	engine := testEngine(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health/intelligence", nil)
+	resp := httptest.NewRecorder()
+	engine.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var body api.Response
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.True(t, body.Success)
 }

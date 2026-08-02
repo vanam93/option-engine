@@ -1,4 +1,4 @@
-package query
+package api
 
 import (
 	"strconv"
@@ -15,6 +15,7 @@ type healthSnapshot struct {
 	errors            uint64
 	totalLatency      time.Duration
 	repositoryLatency time.Duration
+	repositoryReads   uint64
 	cacheHits         uint64
 	cacheMisses       uint64
 }
@@ -34,6 +35,7 @@ func recordRequest(latency time.Duration, err error) {
 func recordRepositoryLatency(latency time.Duration, hit bool) {
 	globalHealth.mu.Lock()
 	defer globalHealth.mu.Unlock()
+	globalHealth.repositoryReads++
 	globalHealth.repositoryLatency += latency
 	if hit {
 		globalHealth.cacheHits++
@@ -42,7 +44,7 @@ func recordRepositoryLatency(latency time.Duration, hit bool) {
 	}
 }
 
-// Health reports query API runtime metrics.
+// Health reports Intelligence API runtime metrics.
 func Health(cfg Config) health.Report {
 	globalHealth.mu.Lock()
 	defer globalHealth.mu.Unlock()
@@ -59,15 +61,15 @@ func Health(cfg Config) health.Report {
 		avgLatency = float64(globalHealth.totalLatency.Milliseconds()) / float64(globalHealth.requests)
 	}
 	repoLatency := float64(0)
-	if globalHealth.cacheHits+globalHealth.cacheMisses > 0 {
-		repoLatency = float64(globalHealth.repositoryLatency.Milliseconds()) / float64(globalHealth.cacheHits+globalHealth.cacheMisses)
+	if globalHealth.repositoryReads > 0 {
+		repoLatency = float64(globalHealth.repositoryLatency.Milliseconds()) / float64(globalHealth.repositoryReads)
 	}
 
 	return health.Report{
 		Component: componentName,
 		Status:    status,
 		Connected: cfg.Enabled,
-		Message:   "research query api",
+		Message:   "intelligence api",
 		Details: map[string]string{
 			"enabled":            boolString(cfg.Enabled),
 			"requests":           u64String(globalHealth.requests),
@@ -80,12 +82,12 @@ func Health(cfg Config) health.Report {
 	}
 }
 
-// HealthReporter wraps query health for DI registration.
+// HealthReporter wraps API health for DI registration.
 type HealthReporter struct {
 	cfg Config
 }
 
-// NewHealthReporter creates a health reporter for the query API.
+// NewHealthReporter creates a health reporter for the Intelligence API.
 func NewHealthReporter(cfg Config) *HealthReporter {
 	return &HealthReporter{cfg: cfg.withDefaults()}
 }

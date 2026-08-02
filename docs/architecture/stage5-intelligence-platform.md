@@ -3057,3 +3057,322 @@ The Dashboard layer (`internal/dashboard`, future) will consume the Query API �
 | 8 | Scanner Persistence | Planned |
 | 9 | Dashboard Layer | Planned |
 
+---
+
+## Phase 7 — Intelligence API Layer
+
+Phase 7 introduces the permanent **Intelligence API** (`internal/api`). This is the first API layer of the platform and the single read-only REST surface for dashboards, mobile apps, email services, Telegram bots, CLI tools, and future integrations. No UI logic, no business logic, and no recommendation generation are included.
+
+### Purpose
+
+| Goal | Detail |
+|------|--------|
+| Single read interface | One REST surface for all intelligence and research state |
+| Read-only | No writes, no EventBus subscriptions, no side effects |
+| Downstream-facing | Serves Dashboard, Mobile, Email, Telegram, CLI, and REST clients |
+| Standard envelope | Every endpoint returns `success`, `timestamp`, `metadata`, `pagination`, `filters`, `data`, `errors` |
+| No execution | Intelligence queries only; never routes orders |
+
+### Architecture
+
+```text
+Dashboard / Mobile / CLI / Email / Telegram / REST Clients
+    ↓
+Intelligence API (internal/api)
+    ↓
+Read-only sources:
+    Recommendation State Manager  → active recommendations only
+    Alert Engine                  → in-memory alert history
+    Opportunity Engine            → current rankings snapshot
+    Performance Engine            → current analytics snapshot
+    Research Repository (PostgreSQL) → optimization, walk-forward, Monte Carlo, research reports
+```
+
+```mermaid
+flowchart TB
+    CLIENTS["Clients\n(Dashboard, Mobile, CLI, Email, Telegram)"]
+    API[Intelligence API\ninternal/api]
+    RSM[Recommendation State]
+    AE[Alert Engine]
+    OPP[Opportunity Engine]
+    PERF[Performance Engine]
+    REPO[Research Repository\nPostgreSQL]
+
+    CLIENTS --> API
+    API --> RSM
+    API --> AE
+    API --> OPP
+    API --> PERF
+    API --> REPO
+```
+
+### Package layout
+
+```text
+internal/api/
+├── server.go       # Server facade, route registration
+├── router.go       # Route mounting with timeout middleware
+├── handlers.go     # Thin Gin HTTP handlers
+├── repository.go   # Read-only aggregation from engines and PostgreSQL
+├── models.go       # DTOs and filter types
+├── pagination.go   # Page-based pagination helpers
+├── response.go     # Standard response envelope
+├── middleware.go   # Request timeout middleware
+├── config.go       # Enabled flag, prefix, timeouts, pagination limits
+├── health.go       # Request/error/latency metrics
+├── errors.go       # Structured errors
+└── api_test.go     # List, detail, timeline, alerts, optimization, research, filter, pagination, health tests
+```
+
+Configuration wiring: `internal/infrastructure/config/api.go`
+
+### REST API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/recommendations` | List recommendations with filters and pagination |
+| `GET` | `/api/v1/recommendations/{id}` | Single recommendation detail |
+| `GET` | `/api/v1/recommendations/{id}/timeline` | Recommendation timeline entries |
+| `GET` | `/api/v1/alerts` | List generated alerts |
+| `GET` | `/api/v1/opportunities` | Current opportunity rankings snapshot |
+| `GET` | `/api/v1/performance` | Performance engine snapshot |
+| `GET` | `/api/v1/optimization` | Persisted optimization results from PostgreSQL |
+| `GET` | `/api/v1/research/{id}` | Research bundle by experiment ID |
+| `GET` | `/api/v1/health/intelligence` | Aggregated intelligence component health |
+
+### Routing
+
+Routes are registered on the configured API prefix (default `/api/v1`) during DI bootstrap:
+
+```text
+intelligenceAPI.Register(httpServer.Engine())
+```
+
+More specific routes (e.g. `/recommendations/:id/timeline`) are registered before parameterized routes to avoid shadowing. Request timeouts are applied via `TimeoutMiddleware` using the configured `read_timeout`.
+
+### Repository
+
+The API repository reads **only** from engine public read APIs and PostgreSQL:
+
+| Endpoint | Data source | Read method |
+|----------|-------------|-------------|
+| Recommendations | Recommendation State Manager | `List()`, `Get()` — active only |
+| Timeline | Recommendation State Manager | `Get()` |
+| Alerts | Alert Engine | `List()` |
+| Opportunities | Opportunity Engine | `Snapshot()` |
+| Performance | Performance Engine | `State()` |
+| Optimization | Research Repository (PostgreSQL) | `ListExperiments()`, `GetResearchBundle()` |
+| Research | Research Repository (PostgreSQL) | `GetResearchBundle()` |
+| Intelligence health | Intelligence engines | `Health()` |
+
+No EventBus subscriptions. No direct cache access bypassing engine APIs. No writes.
+
+### PostgreSQL usage
+
+Historical and persisted data always comes from PostgreSQL via the research repository:
+
+| Table | Used by |
+|-------|---------|
+| `research_experiments` | `/optimization`, `/research/{id}` |
+| `optimization_results` | `/optimization`, `/research/{id}` |
+| `walkforward_results` | `/research/{id}` |
+| `montecarlo_results` | `/research/{id}` |
+| `research_reports` | `/research/{id}` |
+
+Indexed columns (`strategy`, `symbol`, `timeframe`, `experiment_id`) support filtered queries. Repository reads use request context with timeout for stream-safe iteration and cancellation.
+
+### Recommendation State usage
+
+The Recommendation State Manager cache is the source for **active recommendations only** — recommendations that have not yet been persisted to PostgreSQL. When recommendation persistence is added in a future phase, the repository will merge active cache entries with historical PostgreSQL rows without changing the API contract.
+
+### Filtering
+
+All list and snapshot endpoints accept optional query parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `symbol` | string | Filter by instrument symbol |
+| `strategy` | string | Filter by strategy identifier |
+| `timeframe` | string | Filter by bar timeframe |
+| `status` | string | Filter by recommendation/alert lifecycle status |
+| `confidence_min` | float | Minimum confidence threshold |
+| `from` | RFC3339 | Lower bound on `created_at` / `generated_at` |
+| `to` | RFC3339 | Upper bound on `created_at` / `generated_at` |
+| `limit` | int | Page size (default `50`, max `500`) |
+| `offset` | int | Row offset (alternative to `page`) |
+| `page` | int | Page number (1-based) |
+| `sort` | string | Sort field (`created_at`, `confidence`, `symbol`) |
+| `order` | string | Sort direction (`asc` or `desc`) |
+
+Applied filters are echoed in the response `filters` object.
+
+### Pagination
+
+List endpoints return page-based pagination metadata:
+
+```json
+{
+  "success": true,
+  "timestamp": "2026-08-02T10:00:00Z",
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 128,
+    "total_pages": 3,
+    "next_page": 2,
+    "previous_page": null
+  },
+  "filters": { "limit": 50, "page": 1 },
+  "data": []
+}
+```
+
+### Response model
+
+Every endpoint returns the standard envelope:
+
+| Field | Description |
+|-------|-------------|
+| `success` | `true` on success, `false` on error |
+| `timestamp` | Response generation time (UTC) |
+| `metadata` | API version and auxiliary metadata |
+| `pagination` | Page metadata (list endpoints only) |
+| `filters` | Applied query filters |
+| `data` | Result payload (array or object) |
+| `errors` | Error messages (present when `success` is `false`) |
+
+### Configuration
+
+```yaml
+api:
+  enabled: true
+  prefix: /api/v1
+  read_timeout: 30s
+  write_timeout: 30s
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable Intelligence API route registration |
+| `prefix` | `/api/v1` | Base path for API routes |
+| `read_timeout` | `30s` | Per-request read timeout |
+| `write_timeout` | `30s` | Per-request write timeout |
+| `default_limit` | `50` | Default page size for list endpoints |
+| `max_limit` | `500` | Maximum allowed page size |
+
+### Health
+
+`GET /health/components` includes `intelligence_api`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether Intelligence API is configured on |
+| `requests` | Total API requests served |
+| `errors` | Total error responses |
+| `average_latency` | Mean request latency (ms) |
+| `repository_latency` | Mean PostgreSQL read latency (ms) |
+| `cache_hits` | Successful repository reads |
+| `cache_misses` | Repository reads that returned not-found |
+
+`GET /api/v1/health/intelligence` returns aggregated health from scanner, opportunity, recommendation, validation, recommendation state, alert, and research engines.
+
+### Performance
+
+| Concern | Approach |
+|---------|----------|
+| Indexed queries | PostgreSQL indexes on `strategy`, `symbol`, `timeframe`, `experiment_id` |
+| Pagination | In-memory slice pagination after filtered reads; DB-level pagination deferred to persistence phase |
+| Stream-safe iteration | Row iteration with `rows.Next()` in research repository |
+| Context cancellation | Request context propagated to all PostgreSQL reads |
+| Timeouts | `TimeoutMiddleware` applies `read_timeout` per request |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| HTTP handlers | Stateless; concurrent HTTP goroutines |
+| Repository | Delegates to thread-safe engine read APIs |
+| Health counters | `sync.Mutex` on global metrics |
+| Engine snapshots | Immutable copies returned from engines |
+
+Rules:
+
+- No mutable state in API package beyond health counters
+- Repository never holds locks across engine calls
+- PostgreSQL reads use request context with timeout
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| API disabled | `503 Service Unavailable` with `success: false` |
+| Resource not found | `404 Not Found` with `success: false` |
+| Malformed query params | Defaults applied; invalid numerics treated as zero |
+| PostgreSQL error | `500 Internal Server Error` with `success: false` |
+| Nil engine dependency | Empty result set (graceful degradation) |
+
+### Dashboard integration
+
+| Consumer | Integration |
+|----------|-------------|
+| Dashboard | Poll Intelligence API endpoints for live views |
+| Mobile | REST client against `/api/v1/recommendations` and `/api/v1/alerts` |
+| Email digest | Scheduled job queries closed recommendations and alerts |
+| Telegram bot | Command handlers call Intelligence API for symbol lookups |
+| CLI | `curl` or SDK against standard REST endpoints |
+
+The Dashboard layer (`internal/dashboard`, future) **must** consume the Intelligence API — not engine internals directly.
+
+### Future WebSocket integration
+
+A future WebSocket bridge will fan out Intelligence API snapshots to connected clients. The bridge will call the same `internal/api` repository and response types — no duplicate API implementation.
+
+### Future Mobile integration
+
+Mobile clients will authenticate against a future auth layer and consume the same `/api/v1` routes. Response envelopes are stable and versioned via `metadata.version`.
+
+### Future Email integration
+
+Email digest services will poll `/api/v1/recommendations` and `/api/v1/alerts` on a schedule. Filter parameters (`symbol`, `from`, `to`, `status`) support targeted digests without custom query logic.
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| List recommendations | `GET /recommendations` returns paginated list with standard envelope |
+| Recommendation detail | `GET /recommendations/{id}` returns single item |
+| Timeline endpoint | `GET /recommendations/{id}/timeline` returns entries |
+| Alert endpoint | `GET /alerts` returns alert list |
+| Optimization endpoint | `GET /optimization` returns PostgreSQL-backed results |
+| Research endpoint | `GET /research/{id}` returns research bundle |
+| Filter by symbol | `?symbol=NIFTY` filters results |
+| Pagination | `?limit=1&page=1` returns `next_page: 2` |
+| Intelligence health | `GET /health/intelligence` returns component health |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| `internal/api` package | Permanent API layer; all future consumers reuse this package |
+| Read-only repository | API layer never mutates platform state |
+| PostgreSQL for historical data | Single source of truth for persisted research artifacts |
+| Recommendation State for active only | Avoids stale cache reads for closed recommendations |
+| Standard response envelope | Stable contract for Dashboard, Mobile, Email, CLI |
+| Thin handlers | Validate → repository → serialize; no business logic in HTTP layer |
+| No authentication | Auth layer deferred to future multi-user phase |
+| Gin route registration in DI | Keeps HTTP adapter thin; API owns its routes |
+
+### Phase 7 roadmap status (Intelligence API)
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Recommendation Validation Engine | ✅ Complete |
+| 5 | Recommendation State Manager | ✅ Complete |
+| 6 | Alert Engine | ✅ Complete |
+| 7 | Intelligence API Layer | ✅ Complete |
+| 8 | Scanner Persistence | Planned |
+| 9 | Dashboard Layer | Planned |
+

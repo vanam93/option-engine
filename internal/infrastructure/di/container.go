@@ -40,7 +40,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/optimization"
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
-	"github.com/vanam-gangireddy/option-engine/internal/query"
+	"github.com/vanam-gangireddy/option-engine/internal/api"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendation"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendationstate"
 	"github.com/vanam-gangireddy/option-engine/internal/research"
@@ -86,7 +86,7 @@ type Container struct {
 	ValidationEngine         *intelvalidation.Engine
 	RecommendationStateEngine *recommendationstate.Engine
 	AlertEngine               *alerts.Engine
-	QueryAPI                  *query.API
+	IntelligenceAPI           *api.Server
 	BacktestEngine            *backtest.Engine
 	Postgres             *postgres.Pool
 	HTTPServer           *http.Server
@@ -408,25 +408,24 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	}
 	healthReporters = append(healthReporters, &postgresHealthAdapter{pool: pool})
 
-	queryCfg, err := config.BuildQueryAPIConfig(cfg.QueryAPISettings())
+	apiCfg, err := config.BuildAPIConfig(cfg.APISettings())
 	if err != nil {
-		return nil, fmt.Errorf("query config: %w", err)
+		return nil, fmt.Errorf("api config: %w", err)
 	}
-	queryHealth := query.NewHealthReporter(queryCfg)
-	healthReporters = append(healthReporters, queryHealth)
+	apiHealth := api.NewHealthReporter(apiCfg)
+	healthReporters = append(healthReporters, apiHealth)
 
 	moduleLog := logger.WithModule(log, "bootstrap")
 
 	httpServer := http.NewServer(cfg, moduleLog, healthCheckers, healthReporters)
 	wsHub := ws.NewHub(cfg, logger.WithModule(log, "websocket"))
 
-	queryRepo := query.NewRepository(
+	apiRepo := api.NewRepository(
+		apiCfg,
 		recommendationStateEngine,
 		alertEngine,
 		opportunityEngine,
-		scannerEngine,
 		performanceEngine,
-		optimizationEngine,
 		researchRepo,
 		scannerEngine,
 		opportunityEngine,
@@ -436,11 +435,11 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		alertEngine,
 		researchEngine,
 	)
-	queryAPI, err := query.NewAPI(queryCfg, queryRepo)
+	intelligenceAPI, err := api.NewServer(apiCfg, apiRepo)
 	if err != nil {
-		return nil, fmt.Errorf("query api: %w", err)
+		return nil, fmt.Errorf("intelligence api: %w", err)
 	}
-	query.RegisterRoutes(httpServer.Engine().Group(queryCfg.APIPrefix), queryAPI)
+	intelligenceAPI.Register(httpServer.Engine())
 
 	return &Container{
 		Config:               cfg,
@@ -478,7 +477,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		ValidationEngine:          validationEngine,
 		RecommendationStateEngine: recommendationStateEngine,
 		AlertEngine:               alertEngine,
-		QueryAPI:                  queryAPI,
+		IntelligenceAPI:           intelligenceAPI,
 		BacktestEngine:            backtestEngine,
 		Postgres:             pool,
 		HTTPServer:           httpServer,

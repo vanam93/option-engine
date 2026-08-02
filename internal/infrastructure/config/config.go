@@ -35,7 +35,7 @@ type Config struct {
 	Research     ResearchConfig     `mapstructure:"research"`
 	Scanner      ScannerConfig      `mapstructure:"scanner"`
 	Intelligence IntelligenceConfig `mapstructure:"intelligence"`
-	Query        QueryConfig        `mapstructure:"query"`
+	API          APIConfig          `mapstructure:"api"`
 }
 
 type HTTPConfig struct {
@@ -464,6 +464,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("intelligence.validation.max_drawdown", 0.20)
 	v.SetDefault("intelligence.validation.freshness_seconds", 300)
 	v.SetDefault("intelligence.validation.suppress_duplicates", true)
+
+	v.SetDefault("api.enabled", true)
+	v.SetDefault("api.prefix", "/api/v1")
+	v.SetDefault("api.read_timeout", "30s")
+	v.SetDefault("api.write_timeout", "30s")
+	v.SetDefault("api.default_limit", 50)
+	v.SetDefault("api.max_limit", 500)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
