@@ -227,3 +227,113 @@ The container wires those values into the provider manager, gateway, validator, 
 - Reconnect subscription recovery is now handled by the subscription manager after provider reconnect and provider switch, but providers still need to implement stable connect/subscribe semantics.
 - The current runtime path is focused on market data ticks; richer market features such as deeper option-chain fan-out and historical replay remain future work.
 - Snapshot generation is derived from cache state and should be treated as a read model rather than a write path.
+
+## 11. Historical Groww Provider
+
+### Purpose
+
+The Groww provider integrates official Groww Historical Backtesting APIs as a market data source. It behaves like the replay provider: historical candles are downloaded, converted into the existing normalizer payload, and streamed sequentially as `MarketDataReceived` events through the standard provider pipeline.
+
+No analytics, research, recommendation, or AI code is aware that data originates from Groww.
+
+### Architecture
+
+```
+Groww REST API
+    ↓
+GrowwProvider (internal/providers/groww)
+    ↓
+ProviderManager
+    ↓
+Gateway → Normalizer → Validator → Cache → EventBus
+    ↓
+Entire platform
+```
+
+All Groww-specific logic is confined to `internal/providers/groww/`. Future providers (Zerodha, Fyers, Angel One, Upstox, Dhan, CSV, database) should follow the same package layout and register with the provider registry.
+
+### Authentication
+
+Credentials are loaded from configuration only:
+
+- `api_key` + `api_secret` (checksum-based daily token flow)
+- or pre-generated `access_token`
+
+Tokens are sent using standard Groww headers (`Authorization: Bearer`, `X-API-VERSION: 1.0`). No credentials are hardcoded.
+
+### Configuration
+
+Enable by switching the active market provider:
+
+```yaml
+market:
+  provider: groww
+  groww:
+    enabled: true
+    api_key: ${GROWW_API_KEY}
+    api_secret: ${GROWW_API_SECRET}
+    access_token: ${GROWW_ACCESS_TOKEN}
+    base_url: https://api.groww.in
+    requests_per_second: 5
+    retry_attempts: 3
+    retry_backoff_ms: 500
+    replay_speed: realtime
+    candle_interval: 5minute
+    timeframe: 5m
+    exchange: NSE
+    segment: CASH
+    start_time: "2026-08-01T09:15:00+05:30"
+    end_time: "2026-08-27T15:30:00+05:30"
+```
+
+`replay_speed` supports `instant`, `realtime`, `1x`, `2x`, `5x`, `10x`, or a numeric multiplier.
+
+### Replay streaming
+
+Historical candles are fetched in API-compliant date chunks and streamed one candle at a time. The provider does not load full histories into memory. Multi-symbol subscriptions are merged in timestamp order before emission.
+
+Each candle is mapped to the existing `normalizer.Payload` (timestamp, open, high, low, close, volume) and published as `MarketDataReceived`.
+
+### Provider lifecycle
+
+GrowwProvider implements the standard provider interface:
+
+- `Connect` authenticates and starts the streaming goroutine
+- `Subscribe` / `Unsubscribe` manage the desired symbol set
+- `Events` exposes the provider event channel consumed by the gateway session
+- `Disconnect` stops streaming and closes HTTP resources
+- `Health` reports connection, authentication, request, retry, and streaming metrics
+- `Capabilities` reports historical replay support (no live ticks)
+
+### Health
+
+Health reports include:
+
+- `connected`
+- `authenticated`
+- `requests`
+- `errors`
+- `latency_ms`
+- `candles_streamed`
+- `retries`
+- `last_request`
+- `last_response`
+
+### Retry
+
+The HTTP client retries transient failures with exponential backoff for HTTP `429`, `500`, `502`, `503`, and `504`, plus network timeouts. Retry count and backoff are configurable.
+
+### Rate limiting
+
+Outbound requests are throttled with a token-bucket limiter (`requests_per_second`). This protects against Groww API rate limits during long historical replays.
+
+### Future provider support
+
+Groww is the reference implementation for external historical providers. Adding Zerodha, Fyers, or other brokers requires:
+
+1. A new package under `internal/providers/<broker>/`
+2. Implementation of the existing `api.Provider` interface
+3. Registration in `providers.DefaultRegistry()`
+4. A `market.<broker>` configuration block
+
+No changes are required in gateway, analytics, research, or AI packages.

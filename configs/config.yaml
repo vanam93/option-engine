@@ -35,6 +35,22 @@ market:
   replay:
     start_time: "2024-01-15T09:15:00+05:30"
     speed: 1.0
+  groww:
+    enabled: false
+    api_key: ""
+    api_secret: ""
+    access_token: ""
+    base_url: https://api.groww.in
+    requests_per_second: 5
+    retry_attempts: 3
+    retry_backoff_ms: 500
+    replay_speed: realtime
+    candle_interval: 5minute
+    timeframe: 5m
+    exchange: NSE
+    segment: CASH
+    start_time: "2026-08-01T09:15:00+05:30"
+    end_time: "2026-08-27T15:30:00+05:30"
 
 provider:
   reconnect:

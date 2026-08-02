@@ -2,16 +2,18 @@ package providers
 
 import (
 	"github.com/vanam-gangireddy/option-engine/internal/backtest"
+	"github.com/vanam-gangireddy/option-engine/internal/providers/groww"
 	"github.com/vanam-gangireddy/option-engine/internal/providers/mock"
 	"github.com/vanam-gangireddy/option-engine/internal/providers/replay"
 )
 
-// DefaultRegistry returns a registry with built-in mock and replay providers.
+// DefaultRegistry returns a registry with built-in providers.
 func DefaultRegistry() *Registry {
 	r := NewRegistry()
 	mock.Register(r)
 	replay.Register(r)
 	backtest.Register(r)
+	groww.Register(r)
 	return r
 }
 

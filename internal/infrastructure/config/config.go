@@ -80,6 +80,7 @@ type MarketConfig struct {
 	Provider string         `mapstructure:"provider"`
 	Mock     map[string]any `mapstructure:"mock"`
 	Replay   map[string]any `mapstructure:"replay"`
+	Groww    map[string]any `mapstructure:"groww"`
 }
 
 // ProviderConfig holds shared provider runtime settings.
@@ -544,6 +545,10 @@ func (c *Config) ActiveProviderConfig() map[string]any {
 	case "mock":
 		if c.Market.Mock != nil {
 			return c.Market.Mock
+		}
+	case "groww":
+		if c.Market.Groww != nil {
+			return c.Market.Groww
 		}
 	}
 	return map[string]any{}
