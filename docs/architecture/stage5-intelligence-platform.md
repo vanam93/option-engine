@@ -1195,3 +1195,230 @@ sequenceDiagram
 | 3 | Alert Engine | Planned |
 | 4 | Scanner Persistence | Planned |
 | 5 | Query Layer | Planned |
+
+---
+
+## Phase 3 — Recommendation Engine
+
+Phase 3 introduces the **Recommendation Engine** (`internal/recommendation`). The engine consumes **only** `opportunity.updated` events and transforms ranked opportunities into explainable trading recommendations. It does **not** execute trades or generate signals.
+
+### Pipeline
+
+```text
+opportunity.updated
+    ↓
+Recommendation Engine
+    ↓
+recommendation.updated
+```
+
+### Goals
+
+| Goal | Detail |
+|------|--------|
+| Explainable recommendations | Human-readable reasons and supporting evidence per symbol |
+| Tiered levels | `STRONG_BUY`, `BUY`, `WATCH`, `AVOID` based on confidence thresholds |
+| Latest per symbol | Maintain most recent recommendation per `(symbol, timeframe)` |
+| Single input contract | Consume only `opportunity.updated`; no upstream engine imports |
+| No execution | Intelligence output only; never routes orders |
+
+### Package layout
+
+```text
+internal/recommendation/
+├── engine.go       # Lifecycle, subscription, publish
+├── config.go       # Thresholds and subscriber buffer
+├── builder.go      # Recommendation assembly from opportunity input
+├── formatter.go    # Human-readable reasons and summaries
+├── cache.go        # Latest recommendation per symbol/timeframe
+├── events.go       # RecommendationUpdated payload types
+├── health.go       # Health reporter
+├── errors.go       # Structured errors
+└── engine_test.go  # Classification and publish tests
+```
+
+Configuration wiring: `internal/infrastructure/config/recommendation.go`
+
+### Recommendation levels
+
+| Level | Condition (default) | Purpose |
+|-------|---------------------|---------|
+| `STRONG_BUY` | `confidence ≥ 0.85` | High-conviction actionable setup |
+| `BUY` | `0.70 ≤ confidence < 0.85` | Actionable with moderate conviction |
+| `WATCH` | `0.40 ≤ confidence < 0.70` | Monitor; insufficient conviction |
+| `AVOID` | `confidence < 0.40` | No actionable setup |
+
+### Event contract: `recommendation.updated`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `symbol` | string | Instrument symbol |
+| `timeframe` | string | Bar timeframe |
+| `recommendation` | string | `STRONG_BUY`, `BUY`, `WATCH`, or `AVOID` |
+| `confidence` | float64 | Opportunity confidence (0–1) |
+| `rank` | int | Opportunity rank from upstream |
+| `reasons` | []string | Human-readable explanation bullets |
+| `supporting_indicators` | []string | Indicator evidence from opportunity components |
+| `supporting_strategies` | []string | Strategy evidence from opportunity components |
+| `optimization_summary` | string | Optimization score narrative |
+| `walk_forward_summary` | string | Walk-forward validation narrative |
+| `monte_carlo_summary` | string | Monte Carlo robustness narrative |
+| `generated_at` | time | Recommendation timestamp |
+
+### Formatter and builder
+
+The **Formatter** derives human-readable content from `opportunity.updated` component scores:
+
+| Output | Source component |
+|--------|-----------------|
+| Reasons | Confidence, rank, signal/strategy/performance strength, risk factor |
+| Supporting indicators | `signal` component |
+| Supporting strategies | `strategy` component |
+| Optimization summary | `optimization` component |
+| Walk-forward summary | `walkforward` component |
+| Monte Carlo summary | `montecarlo` component |
+
+The **Builder** assembles the full `RecommendationUpdated` payload and assigns the recommendation level via configurable thresholds.
+
+### Configuration
+
+```yaml
+intelligence:
+  recommendation:
+    enabled: true
+    subscriber_buffer: 256
+    strong_buy_threshold: 0.85
+    buy_threshold: 0.70
+    watch_threshold: 0.40
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Enable recommendation engine |
+| `subscriber_buffer` | `256` | Event bus subscriber buffer |
+| `strong_buy_threshold` | `0.85` | Minimum confidence for STRONG_BUY |
+| `buy_threshold` | `0.70` | Minimum confidence for BUY |
+| `watch_threshold` | `0.40` | Minimum confidence for WATCH |
+
+### Engine lifecycle
+
+#### Startup order
+
+Recommendation Engine subscribes **before** Opportunity Engine publishes:
+
+```text
+Recommendation → Opportunity → Scanner → Research → … → Gateway
+```
+
+#### Shutdown order (reverse)
+
+```text
+Gateway → … → Scanner → Opportunity → Recommendation → Research
+```
+
+#### Lifecycle steps
+
+1. `New(cfg, bus, clk)` — validate config, allocate cache, builder, formatter.
+2. `Start(ctx)` — subscribe to `opportunity.updated` only, launch consumer goroutine.
+3. Consumer loop — parse opportunity, build recommendation, cache, publish.
+4. `Close()` — cancel context, drain subscription, wait on WaitGroup, close subscription.
+
+### Component diagram
+
+```mermaid
+flowchart LR
+    subgraph recommendation_pkg["internal/recommendation"]
+        ENG[Engine]
+        CFG[Config]
+        BUILD[Builder]
+        FMT[Formatter]
+        CACHE[Cache]
+        EVT[Events]
+        HLTH[Health]
+    end
+
+    ENG --> CFG
+    ENG --> BUILD
+    ENG --> CACHE
+    ENG --> EVT
+    ENG --> HLTH
+    BUILD --> FMT
+```
+
+### Event flow
+
+```mermaid
+sequenceDiagram
+    participant OPP as Opportunity Engine
+    participant BUS as EventBus
+    participant REC as Recommendation Engine
+    participant CACHE as Cache
+
+    OPP->>BUS: opportunity.updated
+    BUS->>REC: opportunity.updated
+    REC->>REC: Builder + Formatter
+    REC->>CACHE: Put latest (symbol, timeframe)
+    REC->>BUS: recommendation.updated
+```
+
+### Health monitoring
+
+`GET /health/components` includes `recommendation_engine`:
+
+| Detail key | Description |
+|------------|-------------|
+| `enabled` | Whether engine is configured on |
+| `recommendations_generated` | Total recommendations published |
+| `strong_buy` | STRONG_BUY count |
+| `buy` | BUY count |
+| `watch` | WATCH count |
+| `avoid` | AVOID count |
+| `average_confidence` | Mean confidence across generated recommendations |
+| `dropped` | Subscription dropped event count |
+
+### Thread safety
+
+| Component | Mechanism |
+|-----------|-----------|
+| Cache | `sync.RWMutex` on recommendation map |
+| Engine lifecycle | `sync.Mutex` on started/closed flags |
+| Health counters | Updated on each published recommendation |
+| Event processing | Single consumer goroutine |
+
+### Failure handling
+
+| Failure | Behavior |
+|---------|----------|
+| Malformed `opportunity.updated` payload | Skip silently; no publish |
+| Bus publish error | Skip; cache still updated |
+| Shutdown mid-event | Drain subscription before exit |
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| STRONG_BUY generation | High confidence produces STRONG_BUY with summaries |
+| BUY generation | Mid-high confidence produces BUY |
+| WATCH generation | Moderate confidence produces WATCH |
+| Event publish | `opportunity.updated` triggers `recommendation.updated` |
+
+### Design decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Consume only `opportunity.updated` | Clean single-input contract; all factors already scored upstream |
+| Formatter derives text from components | Explainability without importing frozen stage packages |
+| Cache latest per symbol/timeframe | Dashboards read most recent recommendation without history DB |
+| Four recommendation levels | Finer granularity than opportunity BUY/WATCH/IGNORE |
+| No trade execution | Aligns with intelligence-platform scope |
+
+### Phase 3 roadmap status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Market Scanner Engine | ✅ Complete |
+| 2 | Confidence & Opportunity Ranking | ✅ Complete |
+| 3 | Recommendation Engine | ✅ Complete |
+| 4 | Alert Engine | Planned |
+| 5 | Scanner Persistence | Planned |
+| 6 | Query Layer | Planned |

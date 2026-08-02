@@ -39,6 +39,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/optimization"
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
+	"github.com/vanam-gangireddy/option-engine/internal/recommendation"
 	"github.com/vanam-gangireddy/option-engine/internal/research"
 	"github.com/vanam-gangireddy/option-engine/internal/scanner"
 	"github.com/vanam-gangireddy/option-engine/internal/walkforward"
@@ -76,8 +77,9 @@ type Container struct {
 	MonteCarloEngine   *montecarlo.Engine
 	ResearchEngine     *research.Engine
 	ScannerEngine      *scanner.Engine
-	OpportunityEngine  *opportunity.Engine
-	BacktestEngine     *backtest.Engine
+	OpportunityEngine    *opportunity.Engine
+	RecommendationEngine *recommendation.Engine
+	BacktestEngine       *backtest.Engine
 	Postgres           *postgres.Pool
 	HTTPServer         *http.Server
 	WSServer           *ws.Hub
@@ -331,6 +333,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("opportunity engine: %w", err)
 	}
 
+	recommendationCfg, err := config.BuildRecommendationEngineConfig(cfg.RecommendationEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("recommendation config: %w", err)
+	}
+	recommendationEngine, err := recommendation.New(recommendationCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("recommendation engine: %w", err)
+	}
+
 	var healthCheckers []ports.HealthChecker
 	healthCheckers = append(healthCheckers, pool)
 	providerHealth := &providerHealthAdapter{manager: manager}
@@ -353,6 +364,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, researchEngine)
 	healthReporters = append(healthReporters, scannerEngine)
 	healthReporters = append(healthReporters, opportunityEngine)
+	healthReporters = append(healthReporters, recommendationEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -394,7 +406,8 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		MonteCarloEngine:   monteCarloEngine,
 		ResearchEngine:     researchEngine,
 		ScannerEngine:      scannerEngine,
-		OpportunityEngine:  opportunityEngine,
+		OpportunityEngine:    opportunityEngine,
+		RecommendationEngine: recommendationEngine,
 		BacktestEngine:     backtestEngine,
 		Postgres:           pool,
 		HTTPServer:         httpServer,
@@ -425,6 +438,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
 				return err
 			}
+		}
+	}
+	if c.RecommendationEngine != nil {
+		if err := c.RecommendationEngine.Start(ctx); err != nil {
+			return err
 		}
 	}
 	if c.OpportunityEngine != nil {
@@ -555,6 +573,9 @@ func (c *Container) Close() {
 	}
 	if c.OpportunityEngine != nil {
 		_ = c.OpportunityEngine.Close()
+	}
+	if c.RecommendationEngine != nil {
+		_ = c.RecommendationEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()

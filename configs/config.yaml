@@ -224,3 +224,9 @@ intelligence:
       optimization: 0.15
       walkforward: 0.15
       montecarlo: 0.15
+
+  recommendation:
+    enabled: true
+    strong_buy_threshold: 0.85
+    buy_threshold: 0.70
+    watch_threshold: 0.40

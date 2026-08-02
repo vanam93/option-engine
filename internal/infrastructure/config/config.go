@@ -446,6 +446,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("intelligence.opportunity.weights.optimization", 0.15)
 	v.SetDefault("intelligence.opportunity.weights.walkforward", 0.15)
 	v.SetDefault("intelligence.opportunity.weights.montecarlo", 0.15)
+
+	v.SetDefault("intelligence.recommendation.enabled", true)
+	v.SetDefault("intelligence.recommendation.subscriber_buffer", 256)
+	v.SetDefault("intelligence.recommendation.strong_buy_threshold", 0.85)
+	v.SetDefault("intelligence.recommendation.buy_threshold", 0.70)
+	v.SetDefault("intelligence.recommendation.watch_threshold", 0.40)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
