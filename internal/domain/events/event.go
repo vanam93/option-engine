@@ -25,6 +25,7 @@ const (
 	OptimizationUpdated      Type = "optimization.updated"
 	ExperimentCompleted      Type = "experiment.completed"
 	WalkForwardCompleted     Type = "walkforward.completed"
+	MonteCarloCompleted      Type = "montecarlo.completed"
 	ContextEvaluated         Type = "context.evaluated"
 	StrategySignalGenerated  Type = "strategy.signal.generated"
 	DecisionMade             Type = "decision.made"

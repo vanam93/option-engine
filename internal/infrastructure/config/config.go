@@ -31,6 +31,7 @@ type Config struct {
 	Optimization OptimizationConfig `mapstructure:"optimization"`
 	Experiments  ExperimentsConfig  `mapstructure:"experiments"`
 	WalkForward  WalkForwardConfig  `mapstructure:"walkforward"`
+	MonteCarlo   MonteCarloConfig   `mapstructure:"montecarlo"`
 }
 
 type HTTPConfig struct {
@@ -407,6 +408,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("walkforward.subscriber_buffer", 256)
 	v.SetDefault("walkforward.parallel_workers", 2)
 	v.SetDefault("walkforward.max_concurrent_runs", 2)
+
+	v.SetDefault("montecarlo.enabled", true)
+	v.SetDefault("montecarlo.simulations", 1000)
+	v.SetDefault("montecarlo.confidence_level", 0.95)
+	seed := int64(42)
+	v.SetDefault("montecarlo.random_seed", seed)
+	v.SetDefault("montecarlo.subscriber_buffer", 256)
+	v.SetDefault("montecarlo.ruin_drawdown_pct", 1.0)
 }
 
 // HTTPAddr returns the bind address for the HTTP server.

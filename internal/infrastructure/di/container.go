@@ -33,6 +33,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/market/snapshot"
 	"github.com/vanam-gangireddy/option-engine/internal/market/subscription"
 	"github.com/vanam-gangireddy/option-engine/internal/market/validator"
+	"github.com/vanam-gangireddy/option-engine/internal/montecarlo"
 	"github.com/vanam-gangireddy/option-engine/internal/optimization"
 	"github.com/vanam-gangireddy/option-engine/internal/portfolio"
 	"github.com/vanam-gangireddy/option-engine/internal/providers"
@@ -67,6 +68,7 @@ type Container struct {
 	OptimizationEngine  *optimization.Engine
 	ExperimentEngine    *experiments.Engine
 	WalkForwardEngine   *walkforward.Engine
+	MonteCarloEngine    *montecarlo.Engine
 	BacktestEngine      *backtest.Engine
 	Postgres            *postgres.Pool
 	HTTPServer       *http.Server
@@ -278,6 +280,15 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return nil, fmt.Errorf("walkforward engine: %w", err)
 	}
 
+	monteCarloCfg, err := config.BuildMonteCarloEngineConfig(cfg.MonteCarloEngineSettings())
+	if err != nil {
+		return nil, fmt.Errorf("montecarlo config: %w", err)
+	}
+	monteCarloEngine, err := montecarlo.New(monteCarloCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("montecarlo engine: %w", err)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -301,6 +312,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	healthReporters = append(healthReporters, optimizationEngine)
 	healthReporters = append(healthReporters, experimentEngine)
 	healthReporters = append(healthReporters, walkForwardEngine)
+	healthReporters = append(healthReporters, monteCarloEngine)
 	if backtestEngine != nil {
 		healthReporters = append(healthReporters, backtestEngine)
 	}
@@ -338,6 +350,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		OptimizationEngine:  optimizationEngine,
 		ExperimentEngine:    experimentEngine,
 		WalkForwardEngine:   walkForwardEngine,
+		MonteCarloEngine:    monteCarloEngine,
 		BacktestEngine:      backtestEngine,
 		Postgres:            pool,
 		HTTPServer:       httpServer,
@@ -368,6 +381,11 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
 				return err
 			}
+		}
+	}
+	if c.MonteCarloEngine != nil {
+		if err := c.MonteCarloEngine.Start(ctx); err != nil {
+			return err
 		}
 	}
 	if c.WalkForwardEngine != nil {
@@ -466,6 +484,9 @@ func (c *Container) Close() {
 	}
 	if c.WalkForwardEngine != nil {
 		_ = c.WalkForwardEngine.Close()
+	}
+	if c.MonteCarloEngine != nil {
+		_ = c.MonteCarloEngine.Close()
 	}
 	if c.StrategyEngine != nil {
 		_ = c.StrategyEngine.Close()

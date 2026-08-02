@@ -188,3 +188,9 @@ walkforward:
   train_window_days: 30
   validation_window_days: 10
   step_days: 10
+
+montecarlo:
+  enabled: true
+  simulations: 1000
+  confidence_level: 0.95
+  random_seed: 42

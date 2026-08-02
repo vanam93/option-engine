@@ -1016,3 +1016,244 @@ internal/walkforward/
 | Validation aggregation | Correct summary metrics and stability |
 | `walkforward.completed` | Event emitted with required payload fields |
 
+## 47. Monte Carlo Architecture
+
+Monte Carlo simulation (Phase 5) evaluates strategy robustness by statistically resampling walk-forward validation trade outcomes. It does not execute trades, modify optimization logic, duplicate backtesting, or re-run walk-forward analysis.
+
+### Pipeline
+
+```text
+Walk-Forward Engine
+        ↓
+walkforward.completed
+        ↓
+Monte Carlo Engine
+        ↓
+montecarlo.completed
+```
+
+### Design principles
+
+| Rule | Enforcement |
+|------|-------------|
+| Single input event | Subscribes only to `walkforward.completed` |
+| No trade execution | Operates on synthesized trade returns from `performance_metrics` |
+| No optimization | Does not publish or consume `optimization.updated` |
+| No backtest replay | Does not invoke backtest or experiment runners |
+| Append-only events | Publishes `montecarlo.completed` without mutating upstream payloads |
+| Deterministic option | Optional `random_seed` for reproducible simulation paths |
+
+### Package ownership
+
+| Package | Role |
+|---------|------|
+| `internal/montecarlo` | Bootstrap resampling, statistics, orchestration, cache, health |
+| `internal/infrastructure/config/montecarlo.go` | Configuration mapping |
+
+## 48. Statistical Validation
+
+The Monte Carlo Engine validates whether walk-forward out-of-sample results are robust under trade-order and sampling uncertainty.
+
+### Validation workflow
+
+1. Receive `walkforward.completed` with `performance_metrics`.
+2. Extract per-trade PnL samples from aggregated metrics (`ExtractTradeReturns`).
+3. Run `N` simulations alternating bootstrap resampling and randomized ordering.
+4. Compute return and drawdown distributions across all paths.
+5. Derive confidence intervals, profit/loss probabilities, and risk-of-ruin.
+6. Publish immutable `montecarlo.completed` report.
+
+### Metrics produced
+
+| Metric | Description |
+|--------|-------------|
+| Mean return | Average total PnL across simulation paths |
+| Median return | 50th percentile total PnL |
+| Standard deviation | Dispersion of simulated returns |
+| Max drawdown distribution | Per-path peak-to-trough decline |
+| Worst / best drawdown | Extremes of drawdown distribution |
+| Confidence interval | Lower/upper bounds at configured level (default 95%) |
+| Probability of profit | Fraction of paths with positive total return |
+| Probability of loss | Fraction of paths with negative total return |
+| Risk of ruin | Fraction of paths exceeding drawdown ruin threshold |
+
+## 49. Trade Resampling
+
+Trade returns are synthesized from walk-forward `performance_metrics` when individual trade records are not available on the event payload.
+
+### Extraction algorithm
+
+```text
+Input: total_trades, net_pnl, win_rate, average_trade
+  → Compute win/loss counts from win_rate × total_trades
+  → Derive avg_win and avg_loss that reconcile to net_pnl
+  → Emit per-trade PnL slice for resampling
+```
+
+### Resampling modes
+
+| Mode | Method | Purpose |
+|------|--------|---------|
+| Bootstrap | Sample with replacement (`BootstrapSample`) | Estimate return distribution under trade repetition |
+| Shuffle | Randomize order without replacement (`ShuffleOrder`) | Test path dependence from trade sequencing |
+
+Simulations alternate between bootstrap and shuffle paths for balanced coverage.
+
+## 50. Bootstrap Simulation
+
+Bootstrap simulation resamples the trade return population with replacement to produce `N` independent equity paths.
+
+```text
+For each simulation i in 1..N:
+    path ← BootstrapSample(trades, len(trades), rng)
+    total_return[i] ← sum(path)
+    max_drawdown[i] ← MaxDrawdown(path)
+```
+
+Configuration:
+
+```yaml
+montecarlo:
+  enabled: true
+  simulations: 1000
+  confidence_level: 0.95
+  random_seed: 42
+```
+
+When `random_seed` is set, all paths are reproducible across runs.
+
+## 51. Confidence Intervals
+
+Confidence intervals are computed from the sorted simulated return distribution using percentile bounds.
+
+```text
+tail ← (1 - confidence_level) / 2
+lower ← percentile(returns, tail)
+upper ← percentile(returns, 1 - tail)
+mean  ← arithmetic mean of returns
+```
+
+Default confidence level is `0.95` (95% interval). The interval is included in the `montecarlo.completed` payload as `confidence_interval`.
+
+## 52. Distribution Metrics
+
+`distribution_summary` on `montecarlo.completed` aggregates cross-simulation statistics:
+
+| Field | Description |
+|-------|-------------|
+| `mean_return` | Mean simulated total return |
+| `median_return` | Median simulated total return |
+| `std_dev_return` | Standard deviation of returns |
+| `mean_max_drawdown` | Average max drawdown across paths |
+| `median_max_drawdown` | Median max drawdown across paths |
+| `worst_drawdown` | Largest drawdown observed |
+| `best_drawdown` | Smallest drawdown observed |
+
+These metrics quantify the spread of outcomes without requiring additional backtest runs.
+
+## 53. Risk-of-Ruin
+
+Risk-of-ruin measures the fraction of simulation paths where max drawdown exceeds a configurable ruin threshold relative to starting capital.
+
+```text
+starting_capital ← sum(|trade_pnl|) for extracted trades
+ruin_threshold   ← starting_capital × ruin_drawdown_pct
+risk_of_ruin     ← count(max_drawdown >= ruin_threshold) / simulations
+```
+
+Default `ruin_drawdown_pct` is `1.0` (100% of estimated starting capital). Result is always in `[0, 1]`.
+
+## 54. Future Reporting Integration
+
+Report export (Phase 6) will consume `montecarlo.completed` alongside `walkforward.completed` and `optimization.updated`:
+
+| Extension | Integration point |
+|-----------|-------------------|
+| CSV/JSON export | `montecarlo.completed` distribution summaries |
+| Dashboard charts | Return histogram and confidence interval bands |
+| Strategy selection | Combine walk-forward stability + Monte Carlo robustness scores |
+| Persistence | PostgreSQL archival of simulation batches |
+
+The Monte Carlo Engine provides distribution metrics without architectural changes to upstream engines.
+
+## 55. Phase 5 — Monte Carlo Engine
+
+### Responsibility
+
+- Subscribe to `walkforward.completed` events.
+- Extract trade returns from validation `performance_metrics`.
+- Run bootstrap and shuffle Monte Carlo simulations.
+- Compute statistical summaries and confidence intervals.
+- Publish `montecarlo.completed` per walk-forward window.
+
+### Configuration
+
+```yaml
+montecarlo:
+  enabled: true
+  simulations: 1000
+  confidence_level: 0.95
+  random_seed: 42
+```
+
+### Lifecycle
+
+1. Monte Carlo engine starts **before** walk-forward engine (subscribes first).
+2. On `walkforward.completed`, enqueue simulation in consumer goroutine.
+3. Store result in thread-safe in-memory cache.
+4. Publish `montecarlo.completed`.
+5. On shutdown: cancel context, drain subscription, wait on WaitGroup.
+
+### Event payload (`montecarlo.completed`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `simulation_id` | string | Monte Carlo batch identifier |
+| `walkforward_id` | string | Source walk-forward batch |
+| `experiment_id` | string | Source experiment batch |
+| `simulations` | int | Number of paths executed |
+| `confidence_interval` | object | `{ level, lower, upper, mean, median }` |
+| `probability_of_profit` | float64 | Fraction of profitable paths |
+| `probability_of_loss` | float64 | Fraction of losing paths |
+| `risk_of_ruin` | float64 | Fraction of paths exceeding ruin drawdown |
+| `distribution_summary` | object | Return and drawdown aggregates |
+| `timestamp` | time | Completion timestamp |
+
+### Health
+
+`GET /health/components` includes `montecarlo_engine` with `simulations_started`, `simulations_completed`, `reports_generated`, `active_jobs`, `average_runtime_ms`.
+
+### Package layout
+
+```text
+internal/montecarlo/
+├── engine.go       # Lifecycle, bus subscription, orchestration
+├── config.go       # Simulation count, confidence level, seed
+├── simulator.go    # Path generation and summarization
+├── bootstrap.go    # Trade resampling and shuffle
+├── statistics.go   # Confidence intervals, drawdown, risk-of-ruin
+├── cache.go        # Thread-safe simulation state
+├── events.go       # Input/output event payloads
+└── health.go       # Health reporter
+```
+
+### Testing
+
+| Test | Validates |
+|------|-----------|
+| Bootstrap resampling | Correct sample count |
+| Confidence interval | Lower < Mean < Upper |
+| Risk of ruin | Valid probability in [0, 1] |
+| `montecarlo.completed` | Event emitted with required payload fields |
+
+## 56. Updated Stage 4 Roadmap
+
+| Phase | Name | Status | Consumes | Produces |
+|-------|------|--------|----------|----------|
+| 1 | Backtest Replay | Complete | Historical data | `MarketDataReceived` |
+| 2 | Strategy Optimization | Complete | `performance.updated` | `optimization.updated` |
+| 3 | Experiment & Parameter Sweep | Complete | Config grid + replay | `experiment.completed` |
+| 4 | Walk-Forward Analysis | Complete | Rolling replay windows | `walkforward.completed` |
+| 5 | Monte Carlo Simulation | Complete | `walkforward.completed` | `montecarlo.completed` |
+| 6 | Report Export | Planned | `montecarlo.completed` + upstream events | CSV/JSON reports |
+
