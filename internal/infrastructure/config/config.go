@@ -24,6 +24,7 @@ type Config struct {
 	Validation   ValidationConfig   `mapstructure:"validation"`
 	Calendar     CalendarConfig     `mapstructure:"calendar"`
 	Symbols      SymbolsConfig      `mapstructure:"symbols"`
+	Analytics    AnalyticsConfig    `mapstructure:"analytics"`
 }
 
 type HTTPConfig struct {
@@ -108,6 +109,23 @@ type SymbolsConfig struct {
 	File string `mapstructure:"file"`
 }
 
+// AnalyticsConfig groups Stage 3 analytics engine settings.
+type AnalyticsConfig struct {
+	Candle CandleAnalyticsConfig `mapstructure:"candle"`
+}
+
+// CandleAnalyticsConfig controls the candle aggregation engine.
+type CandleAnalyticsConfig struct {
+	Enabled          bool     `mapstructure:"enabled"`
+	Timeframes       []string `mapstructure:"timeframes"`
+	Timezone         string   `mapstructure:"timezone"`
+	SubscriberBuffer int      `mapstructure:"subscriber_buffer"`
+	FlushOnShutdown  bool     `mapstructure:"flush_on_shutdown"`
+	VolumeMode       string   `mapstructure:"volume_mode"`
+	OrderPolicy      string   `mapstructure:"order_policy"`
+	IdleEvictAfter   string   `mapstructure:"idle_evict_after"`
+}
+
 // Load reads configuration from file and environment variables.
 func Load(configPath string) (*Config, error) {
 	v := viper.New()
@@ -166,6 +184,15 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("calendar.expiry_weekday", 4)
 
 	v.SetDefault("symbols.file", "configs/symbols.yaml")
+
+	v.SetDefault("analytics.candle.enabled", true)
+	v.SetDefault("analytics.candle.timeframes", []string{"1m", "5m"})
+	v.SetDefault("analytics.candle.timezone", "Asia/Kolkata")
+	v.SetDefault("analytics.candle.subscriber_buffer", 256)
+	v.SetDefault("analytics.candle.flush_on_shutdown", true)
+	v.SetDefault("analytics.candle.volume_mode", "cumulative")
+	v.SetDefault("analytics.candle.order_policy", "reject_older")
+	v.SetDefault("analytics.candle.idle_evict_after", "0s")
 }
 
 // HTTPAddr returns the bind address for the HTTP server.
@@ -200,4 +227,35 @@ func (c *Config) ActiveProviderConfig() map[string]any {
 // ToCalendarConfig converts to core calendar config.
 func (c *Config) ToCalendarConfig() CalendarConfig {
 	return c.Calendar
+}
+
+// CandleEngineConfig maps analytics candle settings into the candle engine config.
+func (c *Config) CandleEngineConfig() (CandleEngineConfig, error) {
+	cfg := c.Analytics.Candle
+	idleEvict, err := time.ParseDuration(cfg.IdleEvictAfter)
+	if err != nil && cfg.IdleEvictAfter != "" {
+		return CandleEngineConfig{}, fmt.Errorf("analytics.candle.idle_evict_after: %w", err)
+	}
+	return CandleEngineConfig{
+		Enabled:          cfg.Enabled,
+		Timezone:         cfg.Timezone,
+		SubscriberBuffer: cfg.SubscriberBuffer,
+		FlushOnShutdown:  cfg.FlushOnShutdown,
+		VolumeMode:       cfg.VolumeMode,
+		OrderPolicy:      cfg.OrderPolicy,
+		IdleEvictAfter:   idleEvict,
+		Timeframes:       append([]string(nil), cfg.Timeframes...),
+	}, nil
+}
+
+// CandleEngineConfig is the validated candle configuration used by DI wiring.
+type CandleEngineConfig struct {
+	Enabled          bool
+	Timeframes       []string
+	Timezone         string
+	SubscriberBuffer int
+	FlushOnShutdown  bool
+	VolumeMode       string
+	OrderPolicy      string
+	IdleEvictAfter   time.Duration
 }

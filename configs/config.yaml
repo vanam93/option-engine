@@ -71,3 +71,16 @@ calendar:
 
 symbols:
   file: configs/symbols.yaml
+
+analytics:
+  candle:
+    enabled: true
+    timeframes:
+      - 1m
+      - 5m
+    timezone: Asia/Kolkata
+    subscriber_buffer: 256
+    flush_on_shutdown: true
+    volume_mode: cumulative
+    order_policy: reject_older
+    idle_evict_after: 0s

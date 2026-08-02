@@ -8,6 +8,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/adapters/http"
 	"github.com/vanam-gangireddy/option-engine/internal/adapters/ws"
+	"github.com/vanam-gangireddy/option-engine/internal/analytics/candle"
 	"github.com/vanam-gangireddy/option-engine/internal/application/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/calendar"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
@@ -44,6 +45,7 @@ type Container struct {
 	Validator        *validator.Validator
 	Snapshot         func(time.Time) snapshot.Market
 	Subscription     *subscription.Manager
+	CandleEngine     *candle.Engine
 	Postgres         *postgres.Pool
 	HTTPServer       *http.Server
 	WSServer         *ws.Hub
@@ -120,6 +122,19 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		return snapshot.New(cacheStore, at)
 	}
 
+	candleSettings, err := cfg.CandleEngineConfig()
+	if err != nil {
+		return nil, fmt.Errorf("analytics candle config: %w", err)
+	}
+	candleCfg, err := config.BuildCandleEngineConfig(candleSettings)
+	if err != nil {
+		return nil, fmt.Errorf("analytics candle config: %w", err)
+	}
+	candleEngine, err := candle.New(candleCfg, bus, clk)
+	if err != nil {
+		return nil, fmt.Errorf("analytics candle engine: %w", err)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: %w", err)
@@ -132,6 +147,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 
 	var healthReporters []ports.HealthReporter
 	healthReporters = append(healthReporters, providerHealth)
+	healthReporters = append(healthReporters, candleEngine)
 	healthReporters = append(healthReporters, &postgresHealthAdapter{pool: pool})
 
 	moduleLog := logger.WithModule(log, "bootstrap")
@@ -155,6 +171,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 		Validator:        validatorSvc,
 		Snapshot:         snapshotBuilder,
 		Subscription:     subManager,
+		CandleEngine:     candleEngine,
 		Postgres:         pool,
 		HTTPServer:       httpServer,
 		WSServer:         wsHub,
@@ -181,8 +198,15 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			return err
 		}
 	}
+	if c.CandleEngine != nil {
+		if err := c.CandleEngine.Start(ctx); err != nil {
+			return err
+		}
+	}
 	if c.Gateway != nil {
-		return c.Gateway.Start(ctx)
+		if err := c.Gateway.Start(ctx); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -191,6 +215,9 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 func (c *Container) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if c.CandleEngine != nil {
+		_ = c.CandleEngine.Close()
+	}
 	if c.Gateway != nil {
 		_ = c.Gateway.Close()
 	}
