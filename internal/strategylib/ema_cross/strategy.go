@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/cross"
 )
 
@@ -101,18 +102,20 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	close := ctx.Candle.Close
-	fastRes := s.fastEMA.Update(close)
-	slowRes := s.slowEMA.Update(close)
+	fastRes := indaccess.EMA(ctx, s.fastPeriod, s.fastEMA)
+	slowRes := indaccess.EMA(ctx, s.slowPeriod, s.slowEMA)
 	ind := map[string]float64{
 		fmt.Sprintf("ema_%d", s.fastPeriod): fastRes.Value,
 		fmt.Sprintf("ema_%d", s.slowPeriod): slowRes.Value,
 	}
 	if !fastRes.WarmedUp || !slowRes.WarmedUp {
-		if fastRes.WarmedUp {
-			s.prevFast = fastRes.Value
-		}
-		if slowRes.WarmedUp {
-			s.prevSlow = slowRes.Value
+		if !ctx.HasIndicatorStore() {
+			if fastRes.WarmedUp {
+				s.prevFast = fastRes.Value
+			}
+			if slowRes.WarmedUp {
+				s.prevSlow = slowRes.Value
+			}
 		}
 		return builder.IgnoreWithIndicators(ind)
 	}
@@ -120,11 +123,27 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	currFast := fastRes.Value
 	currSlow := slowRes.Value
 	ind["ema_spread"] = currFast - currSlow
-	bullish := cross.Above(s.prevFast, s.prevSlow, currFast, currSlow, s.prevWarmed)
-	bearish := cross.Below(s.prevFast, s.prevSlow, currFast, currSlow, s.prevWarmed)
-	s.prevFast = currFast
-	s.prevSlow = currSlow
-	s.prevWarmed = true
+
+	var prevFast, prevSlow float64
+	var prevWarmed bool
+	if ctx.HasIndicatorStore() {
+		pf, okF := indaccess.EMAAt(ctx, s.fastPeriod, ctx.BarIndex-1)
+		ps, okS := indaccess.EMAAt(ctx, s.slowPeriod, ctx.BarIndex-1)
+		if okF && okS && pf.WarmedUp && ps.WarmedUp {
+			prevFast, prevSlow = pf.Value, ps.Value
+			prevWarmed = true
+		}
+	} else {
+		prevFast, prevSlow, prevWarmed = s.prevFast, s.prevSlow, s.prevWarmed
+	}
+
+	bullish := cross.Above(prevFast, prevSlow, currFast, currSlow, prevWarmed)
+	bearish := cross.Below(prevFast, prevSlow, currFast, currSlow, prevWarmed)
+	if !ctx.HasIndicatorStore() {
+		s.prevFast = currFast
+		s.prevSlow = currSlow
+		s.prevWarmed = true
+	}
 
 	strength := clampSpreadStrength(ind["ema_spread"], close)
 

@@ -24,10 +24,17 @@ func NewEngine(simCfg SimulatorConfig) *Engine {
 	return &Engine{simCfg: simCfg.withDefaults()}
 }
 
-// RunStrategy simulates one strategy over candles.
+// RunStrategy simulates one strategy over candles with a shared indicator cache.
 func (e *Engine) RunStrategy(strategy strategylib.Strategy, candles []market.Candle) RunResult {
+	dataset := NewDataset(candles)
+	return e.RunStrategyOnDataset(strategy, dataset)
+}
+
+// RunStrategyOnDataset simulates one strategy on a pre-built dataset.
+func (e *Engine) RunStrategyOnDataset(strategy strategylib.Strategy, dataset *Dataset) RunResult {
 	sim := NewSimulator(e.simCfg)
-	journal := sim.Run(strategy, candles)
+	candles := dataset.Candles
+	journal := sim.RunWithStore(strategy, candles, dataset.IndicatorSource())
 
 	symbol := ""
 	tf := ""
@@ -46,14 +53,15 @@ func (e *Engine) RunStrategy(strategy strategylib.Strategy, candles []market.Can
 	}
 }
 
-// RunAll simulates every strategy on the same candle stream.
+// RunAll simulates every strategy on the same candle stream and indicator cache.
 func (e *Engine) RunAll(strategies []strategylib.Strategy, candles []market.Candle) []RunResult {
+	dataset := NewDataset(candles)
 	out := make([]RunResult, 0, len(strategies))
 	for _, s := range strategies {
 		if s == nil {
 			continue
 		}
-		out = append(out, e.RunStrategy(s, candles))
+		out = append(out, e.RunStrategyOnDataset(s, dataset))
 	}
 	return out
 }

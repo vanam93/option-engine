@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -21,6 +22,7 @@ var (
 type Strategy struct {
 	windowMinutes int
 	orTracker     *indicators.OpeningRange
+	sessionDay    string
 	brokeHigh     bool
 	brokeLow      bool
 }
@@ -78,7 +80,14 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	c := ctx.Candle
-	orRes := s.orTracker.Update(c.OpenTime, c.High, c.Low)
+	sessionDay := indicators.SessionDayKey(c.OpenTime)
+	if sessionDay != "" && sessionDay != s.sessionDay {
+		s.sessionDay = sessionDay
+		s.brokeHigh = false
+		s.brokeLow = false
+	}
+
+	orRes := indaccess.OpeningRange(ctx, s.windowMinutes, s.orTracker)
 	ind := map[string]float64{
 		"or_high": orRes.High,
 		"or_low":  orRes.Low,

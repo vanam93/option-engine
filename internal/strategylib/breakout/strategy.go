@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -96,21 +97,31 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	c := ctx.Candle
-	prevUpper := s.prevUpper
-	prevLower := s.prevLower
-	prevReady := s.prevReady
+	var prevUpper, prevLower float64
+	var prevReady bool
 
-	chRes := s.channel.Update(c.High, c.Low)
-	atrRes := s.atr.Update(c.High, c.Low, c.Close)
+	if ctx.HasIndicatorStore() {
+		prev, ok := indaccess.DonchianAt(ctx, s.period, ctx.BarIndex-1)
+		if ok && prev.WarmedUp {
+			prevUpper, prevLower, prevReady = prev.Upper, prev.Lower, true
+		}
+	} else {
+		prevUpper, prevLower, prevReady = s.prevUpper, s.prevLower, s.prevReady
+	}
+
+	chRes := indaccess.Donchian(ctx, s.period, s.channel)
+	atrRes := indaccess.ATR(ctx, s.atrPeriod, s.atr)
 	ind := map[string]float64{
 		"donchian_upper": prevUpper,
 		"donchian_lower": prevLower,
 		"atr":            atrRes.Value,
 	}
 	if chRes.WarmedUp {
-		s.prevUpper = chRes.Upper
-		s.prevLower = chRes.Lower
-		s.prevReady = true
+		if !ctx.HasIndicatorStore() {
+			s.prevUpper = chRes.Upper
+			s.prevLower = chRes.Lower
+			s.prevReady = true
+		}
 		ind["donchian_upper"] = chRes.Upper
 		ind["donchian_lower"] = chRes.Lower
 	}

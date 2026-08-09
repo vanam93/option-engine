@@ -21,6 +21,7 @@ func NewSimulator(cfg SimulatorConfig) *Simulator {
 type openPosition struct {
 	direction   Direction
 	entryPrice  float64
+	entryMid    float64
 	entryTime   time.Time
 	entryBar    int
 	quantity    int
@@ -32,14 +33,29 @@ type openPosition struct {
 
 // Run simulates a single strategy across candles and returns a trade journal.
 func (s *Simulator) Run(strategy strategylib.Strategy, candles []market.Candle) *Journal {
+	return s.RunWithStore(strategy, candles, nil)
+}
+
+// RunWithStore simulates a strategy using an optional shared indicator store.
+func (s *Simulator) RunWithStore(strategy strategylib.Strategy, candles []market.Candle, store strategylib.IndicatorSource) *Journal {
+	return s.RunWithMetrics(strategy, candles, store, nil)
+}
+
+// RunWithMetrics simulates a strategy and optionally records execution metrics.
+func (s *Simulator) RunWithMetrics(strategy strategylib.Strategy, candles []market.Candle, store strategylib.IndicatorSource, metrics *SimulationMetrics) *Journal {
 	journal := NewJournal()
 	if strategy == nil || len(candles) == 0 {
 		return journal
+	}
+	if metrics != nil {
+		metrics.Reset()
 	}
 
 	meta := strategy.Metadata()
 	strategyName := strategy.Name()
 	warmup := strategy.WarmupBars()
+	useStore := store != nil
+
 	historyCap := warmup * 3
 	if historyCap < 64 {
 		historyCap = 64
@@ -50,12 +66,16 @@ func (s *Simulator) Run(strategy strategylib.Strategy, candles []market.Candle) 
 
 	for i, candle := range candles {
 		ctx := strategylib.Context{
-			Symbol:    candle.Symbol,
-			Timeframe: string(candle.Timeframe),
-			Candle:    candle,
-			History:   append([]market.Candle(nil), history...),
-			Position:  positionFromOpen(hasPos, pos.direction),
-			Timestamp: candle.CloseTime,
+			Symbol:         candle.Symbol,
+			Timeframe:      string(candle.Timeframe),
+			Candle:         candle,
+			Position:       positionFromOpen(hasPos, pos.direction),
+			Timestamp:      candle.CloseTime,
+			BarIndex:       i,
+			IndicatorStore: store,
+		}
+		if !useStore {
+			ctx.History = append([]market.Candle(nil), history...)
 		}
 		if ctx.Timestamp.IsZero() {
 			ctx.Timestamp = candle.OpenTime
@@ -63,10 +83,12 @@ func (s *Simulator) Run(strategy strategylib.Strategy, candles []market.Candle) 
 
 		if i < warmup {
 			_ = strategy.Evaluate(ctx)
-			history = append(history, candle)
-		if len(history) > historyCap {
-			history = history[len(history)-historyCap:]
-		}
+			if !useStore {
+				history = append(history, candle)
+				if len(history) > historyCap {
+					history = history[len(history)-historyCap:]
+				}
+			}
 			continue
 		}
 
@@ -75,9 +97,11 @@ func (s *Simulator) Run(strategy strategylib.Strategy, candles []market.Candle) 
 		}
 
 		sig := strategy.Evaluate(ctx)
-		history = append(history, candle)
-		if len(history) > historyCap {
-			history = history[len(history)-historyCap:]
+		if !useStore {
+			history = append(history, candle)
+			if len(history) > historyCap {
+				history = history[len(history)-historyCap:]
+			}
 		}
 
 		if !sig.IsAction() {
@@ -86,28 +110,68 @@ func (s *Simulator) Run(strategy strategylib.Strategy, candles []market.Candle) 
 
 		switch sig.Decision {
 		case strategylib.DecisionBuy:
+			if metrics != nil {
+				metrics.BuySignals++
+			}
+			if hasPos && pos.direction == DirectionLong {
+				if metrics != nil {
+					metrics.IgnoredBuyLong++
+				}
+				continue
+			}
 			if hasPos && pos.direction == DirectionShort {
 				journal.Add(s.closePosition(strategyName, &pos, candle, i, sig, meta.Version))
+				if metrics != nil {
+					metrics.Closes++
+				}
 				hasPos = false
 			}
-			if !hasPos {
+			if !hasPos && s.canOpen(journal) {
 				pos = s.openPosition(DirectionLong, candle, i, sig, ctx.MarketRegime)
 				hasPos = true
+				if metrics != nil {
+					metrics.OpensLong++
+				}
 			}
 		case strategylib.DecisionSell:
+			if metrics != nil {
+				metrics.SellSignals++
+			}
+			if hasPos && pos.direction == DirectionShort {
+				if metrics != nil {
+					metrics.IgnoredSellShort++
+				}
+				continue
+			}
 			if hasPos && pos.direction == DirectionLong {
 				journal.Add(s.closePosition(strategyName, &pos, candle, i, sig, meta.Version))
+				if metrics != nil {
+					metrics.Closes++
+				}
 				hasPos = false
 			}
-			if !hasPos {
+			if !hasPos && s.canOpen(journal) {
 				pos = s.openPosition(DirectionShort, candle, i, sig, ctx.MarketRegime)
 				hasPos = true
+				if metrics != nil {
+					metrics.OpensShort++
+				}
 			}
 		case strategylib.DecisionExit:
-			if hasPos {
-				journal.Add(s.closePosition(strategyName, &pos, candle, i, sig, meta.Version))
-				hasPos = false
+			if metrics != nil {
+				metrics.ExitSignals++
 			}
+			if !hasPos {
+				if metrics != nil {
+					metrics.IgnoredExitFlat++
+				}
+				continue
+			}
+			journal.Add(s.closePosition(strategyName, &pos, candle, i, sig, meta.Version))
+			if metrics != nil {
+				metrics.Closes++
+			}
+			hasPos = false
 		}
 	}
 
@@ -120,6 +184,10 @@ func (s *Simulator) Run(strategy strategylib.Strategy, candles []market.Candle) 
 			GeneratedAt: last.CloseTime,
 		}
 		journal.Add(s.closePosition(strategyName, &pos, last, len(candles)-1, exitSig, meta.Version))
+		if metrics != nil {
+			metrics.EndOfDataCloses++
+			metrics.Closes++
+		}
 	}
 
 	return journal
@@ -140,6 +208,7 @@ func (s *Simulator) openPosition(dir Direction, candle market.Candle, bar int, s
 	return openPosition{
 		direction:   dir,
 		entryPrice:  price,
+		entryMid:    candle.Close,
 		entryTime:   candle.CloseTime,
 		entryBar:    bar,
 		quantity:    s.cfg.Quantity,
@@ -148,6 +217,14 @@ func (s *Simulator) openPosition(dir Direction, candle market.Candle, bar int, s
 		mae:         0,
 		regime:      regime,
 	}
+}
+
+func (s *Simulator) canOpen(journal *Journal) bool {
+	equity := s.cfg.InitialCapital
+	for _, t := range journal.Trades {
+		equity += t.NetProfit
+	}
+	return equity > 0
 }
 
 func (s *Simulator) closePosition(strategyName string, pos *openPosition, candle market.Candle, bar int, exitSig strategylib.Signal, version string) SimulatedTrade {
@@ -162,15 +239,16 @@ func (s *Simulator) closePosition(strategyName string, pos *openPosition, candle
 	}
 
 	gross := grossPnL(pos.direction, pos.entryPrice, exitPrice, pos.quantity)
-	slipEntry := slippageCost(pos.entryPrice, pos.quantity, s.cfg.SlippagePct)
-	slipExit := slippageCost(exitPrice, pos.quantity, s.cfg.SlippagePct)
+	slipEntry := slippageFromFill(pos.entryPrice, pos.entryMid, pos.quantity)
+	slipExit := slippageFromFill(exitPrice, candle.Close, pos.quantity)
 	slippage := slipEntry + slipExit
 	commission := s.cfg.Commission * 2
 	taxes := gross * s.cfg.TaxRate
 	if gross < 0 {
 		taxes = 0
 	}
-	net := gross - commission - taxes - slippage
+	// Slippage is already embedded in entry/exit fill prices; do not subtract again.
+	net := gross - commission - taxes
 	entryValue := pos.entryPrice * float64(pos.quantity)
 	retPct := 0.0
 	if entryValue > 0 {
@@ -251,6 +329,14 @@ func grossPnL(dir Direction, entry, exit float64, qty int) float64 {
 		return (exit - entry) * q
 	}
 	return (entry - exit) * q
+}
+
+func slippageFromFill(fill, mid float64, qty int) float64 {
+	diff := fill - mid
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff * float64(qty)
 }
 
 func slippageCost(price float64, qty int, pct float64) float64 {

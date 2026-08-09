@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -89,22 +90,34 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	close := ctx.Candle.Close
 	low := ctx.Candle.Low
 	high := ctx.Candle.High
-	fastRes := s.fastEMA.Update(close)
-	slowRes := s.slowEMA.Update(close)
+	fastRes := indaccess.EMA(ctx, s.fastPeriod, s.fastEMA)
+	slowRes := indaccess.EMA(ctx, s.slowPeriod, s.slowEMA)
 	ind := map[string]float64{
 		fmt.Sprintf("ema_%d", s.fastPeriod): fastRes.Value,
 		fmt.Sprintf("ema_%d", s.slowPeriod): slowRes.Value,
 	}
 	if !fastRes.WarmedUp || !slowRes.WarmedUp {
-		if slowRes.WarmedUp {
+		if !ctx.HasIndicatorStore() && slowRes.WarmedUp {
 			s.prevSlow = slowRes.Value
 		}
 		return builder.IgnoreWithIndicators(ind)
 	}
 
-	uptrend := slowRes.Value > s.prevSlow && close > slowRes.Value
-	downtrend := slowRes.Value < s.prevSlow && close < slowRes.Value
-	s.prevSlow = slowRes.Value
+	var prevSlow float64
+	if ctx.HasIndicatorStore() {
+		ps, ok := indaccess.EMAAt(ctx, s.slowPeriod, ctx.BarIndex-1)
+		if ok && ps.WarmedUp {
+			prevSlow = ps.Value
+		}
+	} else {
+		prevSlow = s.prevSlow
+	}
+
+	uptrend := slowRes.Value > prevSlow && close > slowRes.Value
+	downtrend := slowRes.Value < prevSlow && close < slowRes.Value
+	if !ctx.HasIndicatorStore() {
+		s.prevSlow = slowRes.Value
+	}
 
 	fast := fastRes.Value
 	pullbackLong := low <= fast*(1+s.tolerance) && close > fast

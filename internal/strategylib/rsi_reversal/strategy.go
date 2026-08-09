@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -86,7 +87,7 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 		return builder.Ignore()
 	}
 
-	res := s.rsi.Update(ctx.Candle.Close)
+	res := indaccess.RSI(ctx, s.period, s.rsi)
 	ind := map[string]float64{"rsi": res.Value}
 	if !res.WarmedUp {
 		return builder.IgnoreWithIndicators(ind)

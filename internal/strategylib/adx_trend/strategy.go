@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -79,8 +80,7 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 		return builder.Ignore()
 	}
 
-	c := ctx.Candle
-	res := s.adx.Update(c.High, c.Low, c.Close)
+	res := indaccess.ADX(ctx, s.period, s.adx)
 	ind := map[string]float64{
 		"adx":      res.ADX,
 		"plus_di":  res.PlusDI,

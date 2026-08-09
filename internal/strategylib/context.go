@@ -23,6 +23,8 @@ type Context struct {
 	HigherTFTrend     string
 	PortfolioExposure float64
 	Indicators        map[string]float64
+	BarIndex          int
+	IndicatorStore    IndicatorSource
 	Timestamp         time.Time
 }
 

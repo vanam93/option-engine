@@ -3,6 +3,7 @@ package macd_cross
 import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/cross"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
@@ -79,14 +80,28 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	if !strategylib.ValidCandle(ctx.Candle) {
 		return builder.Ignore()
 	}
-	res := s.macd.Update(ctx.Candle.Close)
+	res := indaccess.MACD(ctx, s.fastPeriod, s.slowPeriod, s.signalPeriod, s.macd)
 	ind := map[string]float64{"macd": res.MACD, "macd_signal": res.Signal, "macd_histogram": res.Histogram}
 	if !res.WarmedUp {
 		return builder.IgnoreWithIndicators(ind)
 	}
-	bullish := cross.Above(s.prevMACD, s.prevSignal, res.MACD, res.Signal, s.prevWarmed)
-	bearish := cross.Below(s.prevMACD, s.prevSignal, res.MACD, res.Signal, s.prevWarmed)
-	s.prevMACD, s.prevSignal, s.prevWarmed = res.MACD, res.Signal, true
+
+	var prevMACD, prevSignal float64
+	var prevWarmed bool
+	if ctx.HasIndicatorStore() {
+		prev, ok := indaccess.MACDAt(ctx, s.fastPeriod, s.slowPeriod, s.signalPeriod, ctx.BarIndex-1)
+		if ok && prev.WarmedUp {
+			prevMACD, prevSignal, prevWarmed = prev.MACD, prev.Signal, true
+		}
+	} else {
+		prevMACD, prevSignal, prevWarmed = s.prevMACD, s.prevSignal, s.prevWarmed
+	}
+
+	bullish := cross.Above(prevMACD, prevSignal, res.MACD, res.Signal, prevWarmed)
+	bearish := cross.Below(prevMACD, prevSignal, res.MACD, res.Signal, prevWarmed)
+	if !ctx.HasIndicatorStore() {
+		s.prevMACD, s.prevSignal, s.prevWarmed = res.MACD, res.Signal, true
+	}
 	strength := clamp01(res.Histogram / ctx.Candle.Close * 100)
 
 	switch ctx.Position {

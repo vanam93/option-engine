@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -107,8 +108,8 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	close := ctx.Candle.Close
-	rsiRes := s.rsi.Update(close)
-	bbRes := s.bands.Update(close)
+	rsiRes := indaccess.RSI(ctx, s.rsiPeriod, s.rsi)
+	bbRes := indaccess.Bollinger(ctx, s.bollingerPeriod, s.stddev, s.bands)
 	ind := map[string]float64{
 		"rsi":       rsiRes.Value,
 		"bb_upper":  bbRes.Upper,

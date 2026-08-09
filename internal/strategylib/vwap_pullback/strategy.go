@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -82,8 +83,8 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	c := ctx.Candle
-	vwapRes := s.vwap.Update(c.OpenTime, c.High, c.Low, c.Close, c.Volume)
-	trendRes := s.trendEMA.Update(c.Close)
+	vwapRes := indaccess.SessionVWAP(ctx, s.vwap)
+	trendRes := indaccess.EMA(ctx, s.trendPeriod, s.trendEMA)
 	ind := map[string]float64{
 		"vwap":                  vwapRes.Value,
 		fmt.Sprintf("ema_%d", s.trendPeriod): trendRes.Value,

@@ -111,8 +111,16 @@ func ComputeStatistics(journal *Journal, initialCapital float64) Statistics {
 
 	stats.EquityCurve = curve
 	stats.MaxDrawdown = maxDD
-	if peak > 0 {
+	if initialCapital > 0 {
+		stats.MaxDrawdownPercent = (maxDD / initialCapital) * 100
+		if stats.MaxDrawdownPercent > 100 {
+			stats.MaxDrawdownPercent = 100
+		}
+	} else if peak > 0 {
 		stats.MaxDrawdownPercent = (maxDD / peak) * 100
+		if stats.MaxDrawdownPercent > 100 {
+			stats.MaxDrawdownPercent = 100
+		}
 	}
 	if stats.TotalTrades > 0 {
 		stats.WinRate = float64(stats.WinningTrades) / float64(stats.TotalTrades)

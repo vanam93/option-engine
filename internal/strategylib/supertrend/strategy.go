@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -82,7 +83,7 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	c := ctx.Candle
-	res := s.st.Update(c.High, c.Low, c.Close)
+	res := indaccess.SuperTrend(ctx, s.atrPeriod, s.multiplier, s.st)
 	ind := map[string]float64{
 		"supertrend":            res.Value,
 		"supertrend_direction": float64(res.Direction),
@@ -92,15 +93,30 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	dir := res.Direction
-	if !s.initialized {
-		s.prevDir = dir
-		s.initialized = true
+	var prevDir int
+	var initialized bool
+	if ctx.HasIndicatorStore() {
+		prev, ok := indaccess.SuperTrendAt(ctx, s.atrPeriod, s.multiplier, ctx.BarIndex-1)
+		if ok && prev.WarmedUp {
+			prevDir, initialized = prev.Direction, true
+		}
+	} else {
+		prevDir, initialized = s.prevDir, s.initialized
+	}
+
+	if !initialized {
+		if !ctx.HasIndicatorStore() {
+			s.prevDir = dir
+			s.initialized = true
+		}
 		return builder.IgnoreWithIndicators(ind)
 	}
 
-	flipUp := s.prevDir < 0 && dir > 0
-	flipDown := s.prevDir > 0 && dir < 0
-	s.prevDir = dir
+	flipUp := prevDir < 0 && dir > 0
+	flipDown := prevDir > 0 && dir < 0
+	if !ctx.HasIndicatorStore() {
+		s.prevDir = dir
+	}
 
 	strength := clamp01((c.Close - res.Value) / c.Close * 100)
 	if strength < 0 {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/indicator/indicators"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib"
+	"github.com/vanam-gangireddy/option-engine/internal/strategylib/indaccess"
 	"github.com/vanam-gangireddy/option-engine/internal/strategylib/internal/stratutil"
 )
 
@@ -105,9 +106,9 @@ func (s *Strategy) Evaluate(ctx strategylib.Context) strategylib.Signal {
 	}
 
 	c := ctx.Candle
-	fastRes := s.fastEMA.Update(c.Close)
-	slowRes := s.slowEMA.Update(c.Close)
-	adxRes := s.adx.Update(c.High, c.Low, c.Close)
+	fastRes := indaccess.EMA(ctx, s.fastPeriod, s.fastEMA)
+	slowRes := indaccess.EMA(ctx, s.slowPeriod, s.slowEMA)
+	adxRes := indaccess.ADX(ctx, s.adxPeriod, s.adx)
 	ind := map[string]float64{
 		fmt.Sprintf("ema_%d", s.fastPeriod): fastRes.Value,
 		fmt.Sprintf("ema_%d", s.slowPeriod): slowRes.Value,
