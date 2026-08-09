@@ -19,17 +19,21 @@ type Ranker struct {
 
 // NewRanker creates a ranker from configuration.
 func NewRanker(cfg Config) *Ranker {
-	return &Ranker{cfg: cfg.withDefaults()}
+	return &Ranker{cfg: cfg.WithDefaults()}
 }
 
 // Rank scores all symbols and returns opportunities sorted by confidence descending.
-func (r *Ranker) Rank(states []SymbolState, platform PlatformState, scorer *Scorer, at time.Time) []RankedOpportunity {
+func (r *Ranker) Rank(states []SymbolState, platform PlatformState, scorer *Scorer) []RankedOpportunity {
 	scored := make([]RankedOpportunity, 0, len(states))
 	for _, state := range states {
 		result := scorer.Compute(state, platform)
+		ts := state.UpdatedAt
+		if ts.IsZero() {
+			ts = time.Now().UTC()
+		}
 		scored = append(scored, RankedOpportunity{
 			ScoreResult: result,
-			Timestamp:   at,
+			Timestamp:   ts.UTC(),
 		})
 	}
 

@@ -10,7 +10,7 @@ type Config struct {
 	SubscriberBuffer   int
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.ConcurrentSessions <= 0 {
 		out.ConcurrentSessions = 1

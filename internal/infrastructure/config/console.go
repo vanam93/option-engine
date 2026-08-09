@@ -24,7 +24,7 @@ func BuildConsoleEngineConfig(cfg ConsoleConfig, subscriberBuffer int) (console.
 		Enabled:          cfg.Enabled,
 		RefreshInterval:  cfg.RefreshInterval,
 		SubscriberBuffer: subscriberBuffer,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return console.Config{}, fmt.Errorf("console config: %w", err)
 	}

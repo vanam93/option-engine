@@ -9,6 +9,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/debuglog"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 )
@@ -34,7 +35,7 @@ type Engine struct {
 
 // New creates a recommendation engine subscribed to opportunity.updated events only.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -124,7 +125,16 @@ func (e *Engine) handle(evt events.Event) {
 	}
 
 	rec := e.builder.Build(input, at)
+	before := e.cache.Count()
 	e.cache.Put(rec)
+	// #region agent log
+	if before <= 3 || e.cache.Count()%500 == 0 {
+		debuglog.Write("D", "recommendation/engine.go:handle", "recommendation cache put overwrite", map[string]any{
+			"symbol": rec.Symbol, "timeframe": rec.Timeframe, "generatedAt": rec.GeneratedAt.UTC().Format(time.RFC3339),
+			"cacheCountBefore": before, "cacheCountAfter": e.cache.Count(),
+		})
+	}
+	// #endregion
 	e.publish(rec)
 	e.health.record(rec)
 }

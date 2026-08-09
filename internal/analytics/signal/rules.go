@@ -24,7 +24,7 @@ type Evaluator struct {
 
 // NewEvaluator creates a rule evaluator from configuration.
 func NewEvaluator(cfg Config) *Evaluator {
-	return &Evaluator{cfg: cfg.withDefaults()}
+	return &Evaluator{cfg: cfg.WithDefaults()}
 }
 
 // Evaluate returns zero or more signals for a single indicator update.

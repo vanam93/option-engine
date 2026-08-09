@@ -38,7 +38,7 @@ func BuildValidationEngineConfig(cfg ValidationEngineConfig) (validation.Config,
 		MaxDrawdown:          cfg.MaxDrawdown,
 		FreshnessSeconds:     cfg.FreshnessSeconds,
 		SuppressDuplicates:   cfg.SuppressDuplicates,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return validation.Config{}, fmt.Errorf("validation config: %w", err)
 	}

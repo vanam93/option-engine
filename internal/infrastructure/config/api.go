@@ -31,7 +31,7 @@ func BuildAPIConfig(cfg APIConfig) (api.Config, error) {
 		WriteTimeout: cfg.WriteTimeout,
 		DefaultLimit: cfg.DefaultLimit,
 		MaxLimit:     cfg.MaxLimit,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return api.Config{}, fmt.Errorf("api config: %w", err)
 	}

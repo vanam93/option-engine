@@ -57,7 +57,7 @@ func TestRankingOrder(t *testing.T) {
 		{Symbol: "BANKNIFTY", Timeframe: "1m", SignalConfidence: 0.5, StrategyConfidence: 0.5, RiskApproved: true, PerformanceScore: 0.4, OptimizationScore: 0.4},
 	}
 
-	ranked := ranker.Rank(states, platform, scorer, at)
+	ranked := ranker.Rank(states, platform, scorer)
 	require.Len(t, ranked, 2)
 	require.Equal(t, "NIFTY", ranked[0].Symbol)
 	require.Equal(t, 1, ranked[0].Rank)

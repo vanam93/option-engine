@@ -17,7 +17,7 @@ type ContextBuilder struct {
 
 // NewContextBuilder creates a context builder with the given configuration.
 func NewContextBuilder(cfg Config) *ContextBuilder {
-	return &ContextBuilder{cfg: cfg.withDefaults()}
+	return &ContextBuilder{cfg: cfg.WithDefaults()}
 }
 
 // Build constructs a complete AI context package.

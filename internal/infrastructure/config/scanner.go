@@ -58,7 +58,7 @@ func BuildScannerEngineConfig(cfg ScannerEngineConfig) (scanner.Config, error) {
 			Trend:   cfg.Scanners.Trend,
 			Ranking: cfg.Scanners.Ranking,
 		},
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return scanner.Config{}, fmt.Errorf("scanner config: %w", err)
 	}

@@ -26,7 +26,7 @@ type Evaluator struct {
 
 // NewEvaluator creates a scanner rule evaluator from configuration.
 func NewEvaluator(cfg Config) *Evaluator {
-	return &Evaluator{cfg: cfg.withDefaults()}
+	return &Evaluator{cfg: cfg.WithDefaults()}
 }
 
 // EvaluateSignal runs signal-based scanners against the latest signal input.

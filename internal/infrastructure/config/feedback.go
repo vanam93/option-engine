@@ -14,9 +14,17 @@ type FeedbackConfig struct {
 	ConfidenceBuckets []float64 `mapstructure:"confidence_buckets"`
 }
 
-// FeedbackEngineSettings maps intelligence feedback settings.
+// FeedbackEngineSettings maps feedback settings from application config.
+// Prefers quality.feedback when present; falls back to intelligence.feedback.
 func (c *Config) FeedbackEngineSettings() FeedbackConfig {
+	if hasFeedbackSettings(c.Quality.Feedback) {
+		return c.Quality.Feedback
+	}
 	return c.Intelligence.Feedback
+}
+
+func hasFeedbackSettings(cfg FeedbackConfig) bool {
+	return cfg.Enabled || cfg.SubscriberBuffer != 0 || len(cfg.RollingWindows) > 0 || len(cfg.ConfidenceBuckets) > 0
 }
 
 // BuildFeedbackEngineConfig maps application config into the feedback engine config.
@@ -26,7 +34,7 @@ func BuildFeedbackEngineConfig(cfg FeedbackConfig) (feedback.Config, error) {
 		SubscriberBuffer:  cfg.SubscriberBuffer,
 		RollingWindows:    cfg.RollingWindows,
 		ConfidenceBuckets: cfg.ConfidenceBuckets,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return feedback.Config{}, fmt.Errorf("feedback config: %w", err)
 	}

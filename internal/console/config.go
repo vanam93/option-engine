@@ -12,7 +12,7 @@ type Config struct {
 	SubscriberBuffer int
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.RefreshInterval <= 0 {
 		out.RefreshInterval = time.Second

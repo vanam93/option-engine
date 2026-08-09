@@ -10,6 +10,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/debuglog"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendation"
@@ -34,7 +35,7 @@ type Engine struct {
 
 // New creates a recommendation state manager subscribed to validated.recommendation events only.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -122,6 +123,16 @@ func (e *Engine) handle(evt events.Event) {
 	}
 
 	rec, latest, duplicateMerged, changed := e.cache.ApplyValidated(input, at)
+	// #region agent log
+	active, closed, _, _ := e.cache.Stats()
+	if !changed || active+closed <= 3 || (active+closed)%100 == 0 {
+		debuglog.Write("E", "recommendationstate/engine.go:handle", "validated recommendation applied to state cache", map[string]any{
+			"symbol": input.Symbol, "timeframe": input.Timeframe, "validationStatus": input.ValidationStatus,
+			"changed": changed, "duplicateMerged": duplicateMerged, "activeCount": active, "closedCount": closed,
+			"validatedAt": at.Format(time.RFC3339), "runId": "post-fix",
+		})
+	}
+	// #endregion
 	if !changed {
 		return
 	}

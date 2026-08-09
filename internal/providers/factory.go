@@ -2,6 +2,7 @@ package providers
 
 import (
 	"github.com/vanam-gangireddy/option-engine/internal/backtest"
+	"github.com/vanam-gangireddy/option-engine/internal/providers/csv"
 	"github.com/vanam-gangireddy/option-engine/internal/providers/groww"
 	"github.com/vanam-gangireddy/option-engine/internal/providers/mock"
 	"github.com/vanam-gangireddy/option-engine/internal/providers/replay"
@@ -14,6 +15,7 @@ func DefaultRegistry() *Registry {
 	replay.Register(r)
 	backtest.Register(r)
 	groww.Register(r)
+	csv.Register(r)
 	return r
 }
 

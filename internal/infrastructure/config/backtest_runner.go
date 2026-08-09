@@ -27,7 +27,7 @@ func BuildBacktestRunnerEngineConfig(cfg BacktestRunnerConfig, subscriberBuffer 
 		AutoStart:          cfg.AutoStart,
 		ConcurrentSessions: cfg.ConcurrentSessions,
 		SubscriberBuffer:   subscriberBuffer,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return backtestrunner.Config{}, fmt.Errorf("backtest_runner config: %w", err)
 	}

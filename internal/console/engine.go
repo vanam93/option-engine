@@ -40,7 +40,7 @@ func New(cfg Config, bus ports.EventBus) (*Engine, error) {
 
 // NewWithWriter creates a recommendation console engine with a custom output writer.
 func NewWithWriter(cfg Config, bus ports.EventBus, out io.Writer, overwrite bool) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

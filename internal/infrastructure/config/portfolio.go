@@ -11,7 +11,7 @@ func BuildPortfolioEngineConfig(cfg PortfolioEngineConfig) (portfolio.Config, er
 	out := portfolio.Config{
 		Enabled:          cfg.Enabled,
 		SubscriberBuffer: cfg.SubscriberBuffer,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return portfolio.Config{}, fmt.Errorf("portfolio config: %w", err)
 	}

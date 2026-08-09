@@ -20,7 +20,7 @@ type Evaluator struct {
 
 // NewEvaluator creates a risk evaluator from configuration.
 func NewEvaluator(cfg Config) *Evaluator {
-	return &Evaluator{cfg: cfg.withDefaults()}
+	return &Evaluator{cfg: cfg.WithDefaults()}
 }
 
 // Process evaluates a decision, updates cache state, and returns the trade intent.

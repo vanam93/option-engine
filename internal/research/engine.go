@@ -38,7 +38,7 @@ type Engine struct {
 
 // New creates a research repository and reporting engine.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock, repo Repository) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

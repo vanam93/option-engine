@@ -55,7 +55,7 @@ func BuildExperimentsEngineConfig(cfg ExperimentsEngineConfig) (experiments.Conf
 		Timeframes:        cfg.Timeframes,
 		Strategy:          cfg.Strategy,
 		ParameterRanges:   cfg.ParameterRanges,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return experiments.Config{}, fmt.Errorf("experiments config: %w", err)
 	}

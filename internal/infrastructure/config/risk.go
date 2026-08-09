@@ -16,7 +16,7 @@ func BuildRiskEngineConfig(cfg RiskEngineConfig) (risk.Config, error) {
 		MaxTradesPerDay:  cfg.MaxTradesPerDay,
 		DefaultQuantity:  cfg.DefaultQuantity,
 		DayResetTimezone: cfg.DayResetTimezone,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return risk.Config{}, fmt.Errorf("risk config: %w", err)
 	}

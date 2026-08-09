@@ -43,7 +43,7 @@ func BuildRecommendationEngineConfig(cfg RecommendationEngineConfig) (recommenda
 		StrongBuyThreshold: cfg.StrongBuyThreshold,
 		BuyThreshold:       cfg.BuyThreshold,
 		WatchThreshold:     cfg.WatchThreshold,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return recommendation.Config{}, fmt.Errorf("recommendation config: %w", err)
 	}

@@ -25,7 +25,7 @@ type Engine struct {
 
 // New creates a backtest engine and loads historical candles when a data path is configured.
 func New(cfg Config, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func New(cfg Config, clk clock.Clock) (*Engine, error) {
 
 // NewWithCandles creates a backtest engine from in-memory historical candles.
 func NewWithCandles(cfg Config, candles []market.Candle, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

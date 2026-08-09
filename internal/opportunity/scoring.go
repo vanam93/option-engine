@@ -28,7 +28,7 @@ type Scorer struct {
 
 // NewScorer creates a scorer from configuration.
 func NewScorer(cfg Config) *Scorer {
-	return &Scorer{cfg: cfg.withDefaults()}
+	return &Scorer{cfg: cfg.WithDefaults()}
 }
 
 // Compute derives confidence and classification for a symbol.

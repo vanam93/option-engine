@@ -14,7 +14,7 @@ type Builder struct {
 func NewBuilder(cfg Config) *Builder {
 	fmt := NewFormatter()
 	return &Builder{
-		cfg:       cfg.withDefaults(),
+		cfg:       cfg.WithDefaults(),
 		fmt:       fmt,
 		explainer: NewExplainer(cfg, fmt),
 		summary:   NewSummaryBuilder(fmt),

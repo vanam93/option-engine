@@ -26,7 +26,7 @@ func BuildAIContextEngineConfig(cfg AIContextConfig) (aicontext.Config, error) {
 		ExecutivePrompt: cfg.ExecutivePrompt,
 		TechnicalPrompt: cfg.TechnicalPrompt,
 		JSONPrompt:      cfg.JSONPrompt,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return aicontext.Config{}, fmt.Errorf("aicontext config: %w", err)
 	}

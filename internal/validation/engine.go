@@ -10,6 +10,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/debuglog"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 	"github.com/vanam-gangireddy/option-engine/internal/recommendation"
@@ -35,7 +36,7 @@ type Engine struct {
 
 // New creates a recommendation validation engine subscribed to recommendation.updated events only.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -119,6 +120,9 @@ func (e *Engine) handle(evt events.Event) {
 	}
 
 	at := e.clk.Now().UTC()
+	if e.cfg.ReplayMode && !input.GeneratedAt.IsZero() {
+		at = input.GeneratedAt.UTC()
+	}
 	previous, _ := e.cache.Get(input.Symbol, input.Timeframe)
 	if e.validator.IsDuplicate(input, previous) {
 		e.health.record(ValidatedRecommendation{}, 0, true, false)
@@ -127,6 +131,16 @@ func (e *Engine) handle(evt events.Event) {
 
 	outcome := e.validator.Validate(input, at)
 	result := outcome.Result
+
+	// #region agent log
+	if result.ValidationStatus == "VALID" {
+		debuglog.Write("E", "validation/engine.go:handle", "recommendation validation outcome", map[string]any{
+			"symbol": input.Symbol, "timeframe": input.Timeframe, "status": result.ValidationStatus,
+			"confidence": input.Confidence, "generatedAt": input.GeneratedAt.UTC().Format(time.RFC3339),
+			"validatedAt": at.Format(time.RFC3339), "reasons": result.RejectionReasons,
+		})
+	}
+	// #endregion
 
 	expired := false
 	for _, reason := range result.RejectionReasons {

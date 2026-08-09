@@ -13,7 +13,7 @@ type Config struct {
 	CooldownSeconds           int
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.SubscriberBuffer <= 0 {
 		out.SubscriberBuffer = 256

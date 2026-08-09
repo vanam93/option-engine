@@ -21,7 +21,7 @@ type Validator struct {
 
 // NewValidator creates a recommendation validator.
 func NewValidator(cfg Config) *Validator {
-	return &Validator{cfg: cfg.withDefaults()}
+	return &Validator{cfg: cfg.WithDefaults()}
 }
 
 // ValidationOutcome captures the result of threshold checks.
@@ -107,7 +107,7 @@ func (v *Validator) Validate(input InputRecommendation, at time.Time) Validation
 		}
 		checked++
 		freshnessScore := 1.0
-		if age > time.Duration(cfg.FreshnessSeconds)*time.Second {
+		if !v.cfg.ReplayMode && age > time.Duration(cfg.FreshnessSeconds)*time.Second {
 			reasons = append(reasons, "recommendation is stale")
 			freshnessScore = 0
 		} else {

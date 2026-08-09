@@ -64,7 +64,7 @@ type validationCollector struct {
 
 // New creates a walk-forward analysis engine.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock, runner experiments.BacktestRunner) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

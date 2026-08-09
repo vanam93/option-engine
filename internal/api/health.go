@@ -89,7 +89,7 @@ type HealthReporter struct {
 
 // NewHealthReporter creates a health reporter for the Intelligence API.
 func NewHealthReporter(cfg Config) *HealthReporter {
-	return &HealthReporter{cfg: cfg.withDefaults()}
+	return &HealthReporter{cfg: cfg.WithDefaults()}
 }
 
 func (h *HealthReporter) Health() health.Report {

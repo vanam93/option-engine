@@ -36,7 +36,7 @@ type Engine struct {
 
 // New creates a Monte Carlo simulation engine.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

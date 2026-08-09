@@ -39,7 +39,7 @@ type Engine struct {
 
 // New creates a candle engine. The bus must be the Stage 2 runtime event bus.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ func BuildPerformanceEngineConfig(cfg PerformanceEngineConfig) (performance.Conf
 	out := performance.Config{
 		Enabled:          cfg.Enabled,
 		SubscriberBuffer: cfg.SubscriberBuffer,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return performance.Config{}, fmt.Errorf("performance config: %w", err)
 	}

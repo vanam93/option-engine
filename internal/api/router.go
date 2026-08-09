@@ -4,7 +4,7 @@ import "github.com/gin-gonic/gin"
 
 // RegisterRoutes mounts Intelligence API routes on the given router group.
 func RegisterRoutes(group *gin.RouterGroup, cfg Config, repo *Repository) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if !cfg.Enabled || repo == nil {
 		return
 	}

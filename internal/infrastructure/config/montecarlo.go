@@ -47,7 +47,7 @@ func BuildMonteCarloEngineConfig(cfg MonteCarloEngineConfig) (montecarlo.Config,
 		RandomSeed:       cfg.RandomSeed,
 		SubscriberBuffer: cfg.SubscriberBuffer,
 		RuinDrawdownPct:  cfg.RuinDrawdownPct,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return montecarlo.Config{}, fmt.Errorf("montecarlo config: %w", err)
 	}

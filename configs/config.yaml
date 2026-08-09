@@ -21,25 +21,35 @@ postgres:
   max_conn_lifetime: 30m
 
 logging:
-  level: info
+  level: debug
   format: json
 
 shutdown:
   timeout: 15s
 
 market:
-  provider: mock
+  provider: csv
   mock:
     tick_interval: 1s
     seed: 1
   replay:
     start_time: "2024-01-15T09:15:00+05:30"
     speed: 1.0
+  csv:
+    enabled: true
+    root_directory: data/raw
+    symbol: NIFTY50
+    exchange: NSE
+    timeframe: 5m
+    replay_speed: instant
+    loop: false
+    publish_delay: false
+    batch_size: 1000
   groww:
     enabled: false
-    api_key: ""
-    api_secret: ""
-    access_token: ""
+    api_key: "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NzQwOTE3NjgsImlhdCI6MTc4NTY5MTc2OCwibmJmIjoxNzg1NjkxNzY4LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCI1MWU4MDFlYi1lZTI5LTRlMWMtODAxZi1mM2UwYjcyNzI2ZGZcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiY2JiZmVmMTctNmNiOC00ODU3LTgyMTMtODA1NWMzOTFiMmI4XCIsXCJkZXZpY2VJZFwiOlwiOGNlYWEwZjAtZjM1NS01MGM1LTk3NWMtZTRjZTU3NGY5M2FjXCIsXCJzZXNzaW9uSWRcIjpcIjViZTM3NWMzLWMxZTItNGIwZS1iMzU2LTExYTQ0ZGY2ZmZiM1wiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYkRLK3AvTFdUQXBWakRiUkE1Z2tRTGRSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNy43LjEyNC44NywxNzIuNzEuMTk4Ljk0LDM1LjI0MS4yMy4xMjNcIixcInR3b0ZhRXhwaXJ5VHNcIjoyNTc0MDkxNzY4NjM3LFwidmVuZG9yTmFtZVwiOlwiZ3Jvd3dBcGlcIn0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.TRjezjH09E4CC3IYCwcIZ45_fdOfiQNr--VrQoQD-LmpIKlDhrAbyJw4E2_bzFYSeoBIvH4KwE1vQvzGlk1YFA"
+    api_secret: "lfRQYN-mC9xMIW5sn9kuZ_!v9&b9Kt#m"
+    access_token: "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3ODU3MTcwMDAsImlhdCI6MTc4NTY5MzE4MSwibmJmIjoxNzg1NjkzMTgxLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJlOWFlY2FkOS1iZGFhLTQ1MjItOGQ3Zi0xNGU2MTgzNjFmYjRcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiY2JiZmVmMTctNmNiOC00ODU3LTgyMTMtODA1NWMzOTFiMmI4XCIsXCJkZXZpY2VJZFwiOlwiOGNlYWEwZjAtZjM1NS01MGM1LTk3NWMtZTRjZTU3NGY5M2FjXCIsXCJzZXNzaW9uSWRcIjpcIjNjNzM2M2RlLWRhZDktNDAxYS1iMmFhLTM0Yjk4MmYwZWE4ZlwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYkRLK3AvTFdUQXBWakRiUkE1Z2tRTGRSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcIm9yZGVyLWJhc2ljLG5vbl90cmFkaW5nLWJhc2ljLG9yZGVyX3JlYWRfb25seS1iYXNpY1wiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNy43LjEyNC44NywxNjIuMTU4LjIyNy4xNjcsMzUuMjQxLjIzLjEyM1wiLFwidHdvRmFFeHBpcnlUc1wiOjE3ODU3MTcwMDAwMDAsXCJ2ZW5kb3JOYW1lXCI6XCJncm93d0FwaVwifSIsImlzcyI6ImFwZXgtYXV0aC1wcm9kLWFwcCJ9.tSGiacrCBRfRSIf5ungI2yDSV2bUGbzJ8W7KAioyScHG8IjkPxwxxWb_rRXEkRsYiWzVYcZ5sqcv_NfWwh8KLQ"
     base_url: https://api.groww.in
     requests_per_second: 5
     retry_attempts: 3
@@ -249,7 +259,7 @@ intelligence:
 
   validation:
     enabled: true
-    min_confidence: 0.70
+    min_confidence: 0.15
     min_optimization_score: 0.60
     min_walkforward_score: 0.60
     min_montecarlo_score: 0.60
@@ -260,10 +270,12 @@ intelligence:
 
   recommendation_state:
     enabled: true
+    subscriber_buffer: 256
     max_active: 10000
 
   alerts:
     enabled: true
+    subscriber_buffer: 256
     confidence_change_threshold: 0.05
     cooldown_seconds: 300
 
@@ -273,12 +285,28 @@ intelligence:
     include_research: true
     include_confidence_breakdown: true
 
-  quality:
-    enabled: true
-    tracking_timeout_minutes: 120
-    excellent_threshold: 0.90
-    good_threshold: 0.75
-    average_threshold: 0.50
+quality:
+  enabled: true
+  subscriber_buffer: 256
+  tracking_timeout_minutes: 120
+
+  # Classification thresholds
+  excellent_threshold: 0.90
+  good_threshold: 0.75
+  average_threshold: 0.50
+
+  # Outcome thresholds (decimal returns: (exit-entry)/entry)
+  success_return_pct: 0.005
+  failure_return_pct: -0.005
+
+  # Quality scoring
+  mfe_weight: 0.20
+  mae_weight: 0.15
+  duration_weight: 0.10
+  confidence_weight: 0.10
+  outcome_weight: 0.10
+  return_weight: 0.30
+  level_weight: 0.05
 
   feedback:
     enabled: true

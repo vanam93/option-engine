@@ -48,7 +48,7 @@ func BuildOptimizationEngineConfig(cfg OptimizationEngineConfig) (optimization.C
 		Enabled:          cfg.Enabled,
 		SubscriberBuffer: cfg.SubscriberBuffer,
 		Scoring:          cfg.Scoring,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return optimization.Config{}, fmt.Errorf("optimization config: %w", err)
 	}

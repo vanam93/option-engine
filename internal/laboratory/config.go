@@ -9,7 +9,7 @@ type Config struct {
 	ConcurrentStudies int
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.ConcurrentStudies <= 0 {
 		out.ConcurrentStudies = 1

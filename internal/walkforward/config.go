@@ -21,7 +21,7 @@ type Config struct {
 	Experiments          experiments.Config
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.TrainWindowDays <= 0 {
 		out.TrainWindowDays = 30

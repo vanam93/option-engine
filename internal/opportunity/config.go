@@ -22,7 +22,7 @@ type Config struct {
 	Weights          WeightsConfig
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.TopN <= 0 {
 		out.TopN = 20

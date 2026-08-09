@@ -9,6 +9,7 @@ import (
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/debuglog"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 )
@@ -25,6 +26,8 @@ type Engine struct {
 	summary Summary
 
 	mu           sync.Mutex
+	historyMu    sync.Mutex
+	history      []RankedOpportunity
 	ctx          context.Context
 	cancel       context.CancelFunc
 	subscription *eventbus.Subscription
@@ -33,9 +36,11 @@ type Engine struct {
 	wg           sync.WaitGroup
 }
 
+const maxOpportunityHistory = 10000
+
 // New creates an opportunity ranking engine.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -208,6 +213,14 @@ func (e *Engine) handleScanner(payload json.RawMessage) {
 		return
 	}
 	e.cache.ApplyScanner(input)
+	// #region agent log
+	if e.cache.SymbolCount() <= 3 || e.cache.SymbolCount()%500 == 0 {
+		debuglog.Write("A", "opportunity/engine.go:handleScanner", "scanner applied to opportunity cache", map[string]any{
+			"symbol": input.Symbol, "timeframe": input.Timeframe, "scannerTS": input.Timestamp.UTC().Format(time.RFC3339),
+			"cacheKeys": e.cache.SymbolCount(),
+		})
+	}
+	// #endregion
 	e.rankAndPublish(input.Timestamp)
 }
 
@@ -217,7 +230,7 @@ func (e *Engine) rankAndPublish(at time.Time) {
 	}
 	states := e.cache.AllSymbols()
 	platform := e.cache.Platform()
-	ranked := e.ranker.Rank(states, platform, e.scorer, at)
+	ranked := e.ranker.Rank(states, platform, e.scorer)
 	top := e.ranker.TopN(ranked)
 	summary := Summarize(ranked, top)
 
@@ -232,6 +245,21 @@ func (e *Engine) rankAndPublish(at time.Time) {
 }
 
 func (e *Engine) publish(item RankedOpportunity, at time.Time) {
+	e.historyMu.Lock()
+	e.history = append(e.history, item)
+	if len(e.history) > maxOpportunityHistory {
+		e.history = e.history[len(e.history)-maxOpportunityHistory:]
+	}
+	historyLen := len(e.history)
+	e.historyMu.Unlock()
+	// #region agent log
+	if historyLen <= 3 || historyLen%1000 == 0 {
+		debuglog.Write("A", "opportunity/engine.go:publish", "opportunity history appended", map[string]any{
+			"symbol": item.Symbol, "timeframe": item.Timeframe, "historyLen": historyLen,
+			"itemTS": item.Timestamp.UTC().Format(time.RFC3339),
+		})
+	}
+	// #endregion
 	out, err := events.NewEventWithClock(e.clk, events.OpportunityUpdated, engineName, OpportunityUpdated{
 		Symbol:         item.Symbol,
 		Timeframe:      item.Timeframe,
@@ -251,6 +279,7 @@ func (e *Engine) publish(item RankedOpportunity, at time.Time) {
 // OpportunitySnapshot is an immutable read model of ranked opportunities.
 type OpportunitySnapshot struct {
 	Ranked   []RankedOpportunity `json:"ranked"`
+	History  []RankedOpportunity `json:"history,omitempty"`
 	Platform PlatformState       `json:"platform"`
 	Summary  Summary             `json:"summary"`
 }
@@ -259,9 +288,26 @@ type OpportunitySnapshot struct {
 func (e *Engine) Snapshot() OpportunitySnapshot {
 	states := e.cache.AllSymbols()
 	platform := e.cache.Platform()
-	at := e.clk.Now().UTC()
-	ranked := e.ranker.Rank(states, platform, e.scorer, at)
+	ranked := e.ranker.Rank(states, platform, e.scorer)
 	top := e.ranker.TopN(ranked)
+	e.historyMu.Lock()
+	history := append([]RankedOpportunity(nil), e.history...)
+	e.historyMu.Unlock()
+
+	// #region agent log
+	stateTS := ""
+	if len(states) > 0 {
+		stateTS = states[0].UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	rankedTS := ""
+	if len(top) > 0 {
+		rankedTS = top[0].Timestamp.UTC().Format(time.RFC3339)
+	}
+	debuglog.Write("B", "opportunity/engine.go:Snapshot", "api snapshot built from live cache", map[string]any{
+		"cacheKeys": len(states), "topN": len(top), "historyLen": len(history),
+		"firstStateUpdatedAt": stateTS, "firstRankedTimestamp": rankedTS, "runId": "post-fix",
+	})
+	// #endregion
 
 	e.mu.Lock()
 	summary := e.summary
@@ -272,6 +318,7 @@ func (e *Engine) Snapshot() OpportunitySnapshot {
 
 	return OpportunitySnapshot{
 		Ranked:   top,
+		History:  history,
 		Platform: platform,
 		Summary:  summary,
 	}

@@ -33,7 +33,7 @@ type Engine struct {
 
 // New creates a strategy engine subscribed to SignalGenerated events only.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

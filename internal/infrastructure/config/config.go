@@ -35,6 +35,7 @@ type Config struct {
 	Research     ResearchConfig     `mapstructure:"research"`
 	Scanner      ScannerConfig      `mapstructure:"scanner"`
 	Intelligence IntelligenceConfig `mapstructure:"intelligence"`
+	Quality      QualityConfig      `mapstructure:"quality"`
 	Console      ConsoleConfig      `mapstructure:"console"`
 	BacktestRunner BacktestRunnerConfig `mapstructure:"backtest_runner"`
 	Laboratory     LaboratoryConfig     `mapstructure:"laboratory"`
@@ -81,6 +82,7 @@ type MarketConfig struct {
 	Mock     map[string]any `mapstructure:"mock"`
 	Replay   map[string]any `mapstructure:"replay"`
 	Groww    map[string]any `mapstructure:"groww"`
+	CSV      map[string]any `mapstructure:"csv"`
 }
 
 // ProviderConfig holds shared provider runtime settings.
@@ -483,6 +485,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("intelligence.quality.excellent_threshold", 0.90)
 	v.SetDefault("intelligence.quality.good_threshold", 0.75)
 	v.SetDefault("intelligence.quality.average_threshold", 0.50)
+	v.SetDefault("intelligence.quality.success_return_pct", 0.005)
+	v.SetDefault("intelligence.quality.failure_return_pct", -0.005)
+
+	v.SetDefault("quality.enabled", true)
+	v.SetDefault("quality.subscriber_buffer", 256)
+	v.SetDefault("quality.tracking_timeout_minutes", 120)
+	v.SetDefault("quality.excellent_threshold", 0.90)
+	v.SetDefault("quality.good_threshold", 0.75)
+	v.SetDefault("quality.average_threshold", 0.50)
+	v.SetDefault("quality.success_return_pct", 0.005)
+	v.SetDefault("quality.failure_return_pct", -0.005)
 
 	v.SetDefault("intelligence.feedback.enabled", true)
 	v.SetDefault("intelligence.feedback.subscriber_buffer", 256)
@@ -549,6 +562,10 @@ func (c *Config) ActiveProviderConfig() map[string]any {
 	case "groww":
 		if c.Market.Groww != nil {
 			return c.Market.Groww
+		}
+	case "csv":
+		if c.Market.CSV != nil {
+			return c.Market.CSV
 		}
 	}
 	return map[string]any{}

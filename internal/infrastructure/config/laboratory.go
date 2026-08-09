@@ -24,7 +24,7 @@ func BuildLaboratoryEngineConfig(cfg LaboratoryConfig) (laboratory.Config, error
 		Enabled:           cfg.Enabled,
 		AutoVersion:       cfg.AutoVersion,
 		ConcurrentStudies: cfg.ConcurrentStudies,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return laboratory.Config{}, fmt.Errorf("laboratory config: %w", err)
 	}

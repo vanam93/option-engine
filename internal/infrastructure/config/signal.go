@@ -27,7 +27,7 @@ func BuildSignalEngineConfig(cfg SignalEngineConfig) (signal.Config, error) {
 		Bollinger: signal.BollingerConfig{
 			Enabled: cfg.Bollinger.Enabled,
 		},
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return signal.Config{}, fmt.Errorf("signal config: %w", err)
 	}

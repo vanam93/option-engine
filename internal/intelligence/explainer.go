@@ -21,7 +21,7 @@ type Explainer struct {
 
 // NewExplainer creates an explainer.
 func NewExplainer(cfg Config, fmt *Formatter) *Explainer {
-	return &Explainer{cfg: cfg.withDefaults(), fmt: fmt}
+	return &Explainer{cfg: cfg.WithDefaults(), fmt: fmt}
 }
 
 // ClassifyLevel maps confidence to a recommendation level.

@@ -21,7 +21,7 @@ type Config struct {
 	Timeframe market.Timeframe
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	if c.Speed <= 0 {
 		c.Speed = 1.0
 	}

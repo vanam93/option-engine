@@ -13,7 +13,7 @@ func BuildPaperExecutionConfig(cfg PaperExecutionEngineConfig) (paper.Config, er
 		SubscriberBuffer: cfg.SubscriberBuffer,
 		SlippagePercent:  cfg.SlippagePercent,
 		DefaultPrice:     cfg.DefaultPrice,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return paper.Config{}, fmt.Errorf("paper execution config: %w", err)
 	}

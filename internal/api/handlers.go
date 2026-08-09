@@ -16,7 +16,7 @@ type Handlers struct {
 
 // NewHandlers creates Intelligence API HTTP handlers.
 func NewHandlers(cfg Config, repo *Repository) *Handlers {
-	return &Handlers{cfg: cfg.withDefaults(), repo: repo}
+	return &Handlers{cfg: cfg.WithDefaults(), repo: repo}
 }
 
 func (h *Handlers) parseFilter(c *gin.Context) Filter {

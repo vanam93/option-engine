@@ -13,7 +13,7 @@ type Simulator struct {
 
 // NewSimulator creates a Monte Carlo path generator.
 func NewSimulator(cfg Config) *Simulator {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	var rng *rand.Rand
 	if cfg.RandomSeed != nil {
 		rng = rand.New(rand.NewSource(*cfg.RandomSeed))

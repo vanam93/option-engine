@@ -11,7 +11,7 @@ type Builder struct {
 // NewBuilder creates a recommendation builder.
 func NewBuilder(cfg Config, formatter *Formatter) *Builder {
 	return &Builder{
-		cfg:       cfg.withDefaults(),
+		cfg:       cfg.WithDefaults(),
 		formatter: formatter,
 	}
 }

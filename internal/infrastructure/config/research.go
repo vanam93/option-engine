@@ -39,7 +39,7 @@ func BuildResearchEngineConfig(cfg ResearchEngineConfig) (research.Config, error
 		ExportDirectory:  cfg.ExportDirectory,
 		Formats:          cfg.Formats,
 		SubscriberBuffer: cfg.SubscriberBuffer,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return research.Config{}, fmt.Errorf("research config: %w", err)
 	}

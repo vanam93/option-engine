@@ -24,7 +24,7 @@ func BuildRecommendationStateEngineConfig(cfg RecommendationStateConfig) (recomm
 		Enabled:          cfg.Enabled,
 		SubscriberBuffer: cfg.SubscriberBuffer,
 		MaxActive:        cfg.MaxActive,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return recommendationstate.Config{}, fmt.Errorf("recommendation state config: %w", err)
 	}

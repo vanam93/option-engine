@@ -14,9 +14,10 @@ type Config struct {
 	MaxDrawdown          float64
 	FreshnessSeconds     int
 	SuppressDuplicates   bool
+	ReplayMode           bool
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.SubscriberBuffer <= 0 {
 		out.SubscriberBuffer = 256

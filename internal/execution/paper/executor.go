@@ -7,7 +7,7 @@ type Executor struct {
 
 // NewExecutor creates a paper order executor from configuration.
 func NewExecutor(cfg Config) *Executor {
-	return &Executor{cfg: cfg.withDefaults()}
+	return &Executor{cfg: cfg.WithDefaults()}
 }
 
 // Execute simulates an approved trade intent and returns an execution report.

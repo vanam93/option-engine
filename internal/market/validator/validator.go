@@ -34,6 +34,8 @@ func (e *Error) Error() string {
 type Config struct {
 	MaxAge                  time.Duration
 	RequireRegisteredSymbol bool
+	// ReplayMode disables wall-clock staleness checks so historical ticks can flow during replay.
+	ReplayMode bool
 }
 type Validator struct {
 	mu      sync.Mutex
@@ -58,7 +60,10 @@ func (v *Validator) Validate(t market.Tick, now time.Time) error {
 	if t.Volume < 0 || t.BidQty < 0 || t.AskQty < 0 || t.OI < 0 {
 		return &Error{InvalidQuantity, t.Symbol, "negative quantity"}
 	}
-	if t.ProviderTS.IsZero() || (v.cfg.MaxAge > 0 && now.Sub(t.ProviderTS) > v.cfg.MaxAge) {
+	if t.ProviderTS.IsZero() {
+		return &Error{OldTimestamp, t.Symbol, "timestamp is missing"}
+	}
+	if !v.cfg.ReplayMode && v.cfg.MaxAge > 0 && now.Sub(t.ProviderTS) > v.cfg.MaxAge {
 		return &Error{OldTimestamp, t.Symbol, "timestamp is stale"}
 	}
 	v.mu.Lock()

@@ -12,7 +12,7 @@ type Config struct {
 	RuinDrawdownPct  float64
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.Simulations <= 0 {
 		out.Simulations = 1000

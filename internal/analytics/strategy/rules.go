@@ -22,7 +22,7 @@ type Evaluator struct {
 
 // NewEvaluator creates a strategy evaluator from configuration.
 func NewEvaluator(cfg Config) *Evaluator {
-	return &Evaluator{cfg: cfg.withDefaults()}
+	return &Evaluator{cfg: cfg.WithDefaults()}
 }
 
 // Process stores a signal, evaluates enabled strategies, and updates position state.

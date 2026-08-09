@@ -15,7 +15,7 @@ type Config struct {
 	MaxLimit     int
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.Prefix == "" {
 		out.Prefix = "/api/v1"
@@ -40,7 +40,7 @@ func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	out := c.withDefaults()
+	out := c.WithDefaults()
 	if out.DefaultLimit < 1 {
 		return fmt.Errorf("api: default_limit must be >= 1")
 	}

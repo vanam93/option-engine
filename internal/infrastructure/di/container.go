@@ -130,6 +130,12 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 			return nil, fmt.Errorf("backtest engine: %w", err)
 		}
 		clk = backtestEngine.Clock()
+	} else if isReplayMarketProvider(cfg.Market.Provider) {
+		if start := marketReplayStartTime(cfg); !start.IsZero() {
+			clk = clock.NewReplay(start)
+		} else {
+			clk = clock.NewReplay(time.Unix(0, 0).UTC())
+		}
 	}
 
 	metricReg := metrics.NewNoopRegistry()
@@ -197,7 +203,11 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 
 	cacheStore := cache.New()
 	bus := eventbus.New()
-	validatorSvc := validator.New(validator.Config{MaxAge: cfg.Validation.MaxTickAge, RequireRegisteredSymbol: true}, symbols)
+	validatorSvc := validator.New(validator.Config{
+		MaxAge:                  cfg.Validation.MaxTickAge,
+		RequireRegisteredSymbol: true,
+		ReplayMode:              isReplayMarketProvider(cfg.Market.Provider),
+	}, symbols)
 	normalizerSvc := normalizer.New(clk.Now)
 	gatewayEngine := gateway.New(manager.Session(), cacheStore, bus, validatorSvc, normalizerSvc, clk.Now)
 	subManager := subscription.New(provider, cfg.Subscription.BatchSize)
@@ -372,6 +382,7 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	if err != nil {
 		return nil, fmt.Errorf("validation config: %w", err)
 	}
+	validationCfg.ReplayMode = isReplayMarketProvider(cfg.Market.Provider)
 	validationEngine, err := intelvalidation.New(validationCfg, bus, clk)
 	if err != nil {
 		return nil, fmt.Errorf("validation engine: %w", err)
@@ -628,30 +639,10 @@ func NewContainer(ctx context.Context, cfg *config.Config, log *slog.Logger) (*C
 	}, nil
 }
 
-// StartRuntime connects the provider and starts the market pipeline.
+// StartRuntime starts the market pipeline, then connects the provider.
 func (c *Container) StartRuntime(ctx context.Context) error {
-	if c.ProviderManager != nil {
-		if c.Subscription != nil {
-			c.ProviderManager.SetSubscriptionManager(c.Subscription)
-		}
-		if err := c.ProviderManager.Connect(ctx); err != nil {
-			return err
-		}
-	}
-	if c.Subscription != nil {
-		symbols := c.backtestSymbols()
-		if len(symbols) == 0 && c.SymbolRegistry != nil {
-			instruments := c.SymbolRegistry.All()
-			symbols = make([]string, 0, len(instruments))
-			for _, inst := range instruments {
-				symbols = append(symbols, inst.Symbol)
-			}
-		}
-		if len(symbols) > 0 {
-			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
-				return err
-			}
-		}
+	if c.ProviderManager != nil && c.Subscription != nil {
+		c.ProviderManager.SetSubscriptionManager(c.Subscription)
 	}
 	if c.AlertEngine != nil {
 		if err := c.AlertEngine.Start(ctx); err != nil {
@@ -798,6 +789,26 @@ func (c *Container) StartRuntime(ctx context.Context) error {
 			return err
 		}
 	}
+	if c.ProviderManager != nil {
+		if err := c.ProviderManager.Connect(ctx); err != nil {
+			return err
+		}
+	}
+	if c.Subscription != nil {
+		symbols := c.backtestSymbols()
+		if len(symbols) == 0 && c.SymbolRegistry != nil {
+			instruments := c.SymbolRegistry.All()
+			symbols = make([]string, 0, len(instruments))
+			for _, inst := range instruments {
+				symbols = append(symbols, inst.Symbol)
+			}
+		}
+		if len(symbols) > 0 {
+			if err := c.Subscription.Subscribe(ctx, symbols); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -901,6 +912,34 @@ func (c *Container) Close() {
 	if c.Postgres != nil {
 		c.Postgres.Close()
 	}
+}
+
+func isReplayMarketProvider(name string) bool {
+	switch name {
+	case "csv", "replay", "backtest":
+		return true
+	default:
+		return false
+	}
+}
+
+func marketReplayStartTime(cfg *config.Config) time.Time {
+	if cfg == nil {
+		return time.Time{}
+	}
+	if raw, ok := cfg.ActiveProviderConfig()["start_time"].(string); ok && raw != "" {
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			return t
+		}
+	}
+	if cfg.Market.Replay != nil {
+		if raw, ok := cfg.Market.Replay["start_time"].(string); ok && raw != "" {
+			if t, err := time.Parse(time.RFC3339, raw); err == nil {
+				return t
+			}
+		}
+	}
+	return time.Time{}
 }
 
 func (c *Container) backtestSymbols() []string {

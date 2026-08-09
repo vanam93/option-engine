@@ -17,6 +17,7 @@ type Cache struct {
 	mu sync.RWMutex
 
 	maxActive int
+	maxHistory int
 
 	active map[compositeKey]string
 	closed map[compositeKey]string
@@ -26,7 +27,10 @@ type Cache struct {
 	byStrategy map[string]map[string]struct{}
 
 	seqBySymbolDate map[string]uint64
+	history         []Recommendation
 }
+
+const defaultMaxHistory = 10000
 
 type storedRecommendation struct {
 	recommendation Recommendation
@@ -40,6 +44,7 @@ func NewCache(maxActive int) *Cache {
 	}
 	return &Cache{
 		maxActive:       maxActive,
+		maxHistory:      defaultMaxHistory,
 		active:          make(map[compositeKey]string),
 		closed:          make(map[compositeKey]string),
 		byID:            make(map[string]*storedRecommendation),
@@ -89,6 +94,7 @@ func (c *Cache) ApplyValidated(input InputValidated, at time.Time) (Recommendati
 		c.byID[rec.RecommendationID] = stored
 		c.active[key] = rec.RecommendationID
 		c.index(rec.RecommendationID, rec.Symbol, rec.Strategy)
+		c.appendHistory(rec)
 		return rec, latest, false, true
 	}
 
@@ -113,7 +119,16 @@ func (c *Cache) ApplyValidated(input InputValidated, at time.Time) (Recommendati
 		c.active[key] = rec.RecommendationID
 	}
 
+	c.appendHistory(rec)
+
 	return rec, latest, true, true
+}
+
+func (c *Cache) appendHistory(rec Recommendation) {
+	c.history = append(c.history, rec)
+	if len(c.history) > c.maxHistory {
+		c.history = c.history[len(c.history)-c.maxHistory:]
+	}
 }
 
 func (c *Cache) nextID(symbol string, at time.Time) string {
@@ -140,12 +155,19 @@ func (c *Cache) List(symbol, strategy, timeframe, status string, confidenceMin f
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	out := make([]Recommendation, 0, len(c.byID))
-	for _, stored := range c.byID {
-		if stored == nil {
-			continue
+	out := make([]Recommendation, 0, len(c.history)+len(c.byID))
+	if len(c.history) > 0 {
+		out = append(out, c.history...)
+	} else {
+		for _, stored := range c.byID {
+			if stored == nil {
+				continue
+			}
+			out = append(out, stored.recommendation)
 		}
-		rec := stored.recommendation
+	}
+	filtered := make([]Recommendation, 0, len(out))
+	for _, rec := range out {
 		if symbol != "" && rec.Symbol != symbol {
 			continue
 		}
@@ -161,9 +183,9 @@ func (c *Cache) List(symbol, strategy, timeframe, status string, confidenceMin f
 		if confidenceMin > 0 && rec.Confidence < confidenceMin {
 			continue
 		}
-		out = append(out, rec)
+		filtered = append(filtered, rec)
 	}
-	return out
+	return filtered
 }
 
 // GetByID returns a recommendation and its timeline by ID.

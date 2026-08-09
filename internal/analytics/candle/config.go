@@ -21,8 +21,8 @@ type Config struct {
 	IdleEvictAfter   time.Duration
 }
 
-// withDefaults returns cfg with production defaults applied for unset enum fields.
-func (c Config) withDefaults() Config {
+// WithDefaults returns cfg with production defaults applied for unset enum fields.
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.VolumeMode == "" {
 		out.VolumeMode = VolumeCumulative

@@ -131,7 +131,7 @@ func strengthLabel(score float64) string {
 
 // ClassifyLevel maps confidence to a recommendation level.
 func ClassifyLevel(confidence float64, cfg Config) Level {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	switch {
 	case confidence >= cfg.StrongBuyThreshold:
 		return LevelStrongBuy

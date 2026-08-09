@@ -22,7 +22,7 @@ func BuildAIResearchEngineConfig(cfg AIResearchConfig) (airesearch.Config, error
 	out := airesearch.Config{
 		Enabled:  cfg.Enabled,
 		Analyzer: cfg.Analyzer,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return airesearch.Config{}, fmt.Errorf("airesearch config: %w", err)
 	}

@@ -21,7 +21,7 @@ func BuildStrategyEngineConfig(cfg StrategyEngineConfig) (strategy.Config, error
 		Breakout: strategy.BreakoutConfig{
 			Enabled: cfg.Breakout.Enabled,
 		},
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return strategy.Config{}, fmt.Errorf("strategy config: %w", err)
 	}

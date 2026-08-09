@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vanam-gangireddy/option-engine/internal/analytics/ports"
 	"github.com/vanam-gangireddy/option-engine/internal/core/clock"
 	"github.com/vanam-gangireddy/option-engine/internal/core/health"
+	"github.com/vanam-gangireddy/option-engine/internal/debuglog"
 	"github.com/vanam-gangireddy/option-engine/internal/domain/events"
 	"github.com/vanam-gangireddy/option-engine/internal/market/eventbus"
 )
@@ -29,11 +31,12 @@ type Engine struct {
 	started      bool
 	closed       bool
 	wg           sync.WaitGroup
+	debugPublishCount uint64
 }
 
 // New creates a market scanner engine.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -259,6 +262,16 @@ func (e *Engine) publishResults(results []ScanResult) {
 }
 
 func (e *Engine) publish(result ScanResult) {
+	// #region agent log
+	n := atomic.AddUint64(&e.debugPublishCount, 1)
+	if n <= 3 || n%1000 == 0 {
+		debuglog.Write("C", "scanner/engine.go:publish", "scanner result published", map[string]any{
+			"symbol": result.Symbol, "timeframe": result.Timeframe,
+			"resultTS": result.Timestamp.UTC().Format(time.RFC3339),
+			"clkNow": e.clk.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	// #endregion
 	out, err := events.NewEventWithClock(e.clk, events.ScannerUpdated, engineName, result.toEvent())
 	if err != nil {
 		return

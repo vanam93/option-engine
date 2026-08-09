@@ -53,7 +53,7 @@ func BuildExplanationEngineConfig(cfg ExplanationEngineConfig) (intelligence.Con
 		StrongBuyThreshold:         cfg.StrongBuyThreshold,
 		BuyThreshold:               cfg.BuyThreshold,
 		WatchThreshold:             cfg.WatchThreshold,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return intelligence.Config{}, fmt.Errorf("explanation config: %w", err)
 	}

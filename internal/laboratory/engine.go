@@ -34,7 +34,7 @@ type Engine struct {
 
 // New creates a strategy laboratory engine.
 func New(cfg Config, bus ports.EventBus, clk clock.Clock, backtest BacktestRunner, sessions SessionSource) (*Engine, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

@@ -70,7 +70,7 @@ func NewRepository(
 	intelligence ...ComponentHealth,
 ) *Repository {
 	return &Repository{
-		cfg:             cfg.withDefaults(),
+		cfg:             cfg.WithDefaults(),
 		recommendations: recommendations,
 		alerts:          alerts,
 		opportunities:   opportunities,

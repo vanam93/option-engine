@@ -28,7 +28,7 @@ type Config struct {
 	Strategy          string
 }
 
-func (c Config) withDefaults() Config {
+func (c Config) WithDefaults() Config {
 	out := c
 	if out.ParallelWorkers <= 0 {
 		out.ParallelWorkers = 4

@@ -18,7 +18,7 @@ func GenerateRunID() string {
 
 // GenerateMatrix builds the cartesian product of configured parameter ranges.
 func GenerateMatrix(cfg Config, experimentID string) []ExperimentRun {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	ranges := cfg.ParameterRanges
 
 	dimensions := []struct {

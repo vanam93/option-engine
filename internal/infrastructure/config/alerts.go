@@ -26,7 +26,7 @@ func BuildAlertsEngineConfig(cfg AlertsConfig) (alerts.Config, error) {
 		SubscriberBuffer:          cfg.SubscriberBuffer,
 		ConfidenceChangeThreshold: cfg.ConfidenceChangeThreshold,
 		CooldownSeconds:           cfg.CooldownSeconds,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return alerts.Config{}, fmt.Errorf("alerts config: %w", err)
 	}

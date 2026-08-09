@@ -77,7 +77,7 @@ func BuildOpportunityEngineConfig(cfg OpportunityEngineConfig) (opportunity.Conf
 			WalkForward:  cfg.Weights.WalkForward,
 			MonteCarlo:   cfg.Weights.MonteCarlo,
 		},
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return opportunity.Config{}, fmt.Errorf("opportunity config: %w", err)
 	}

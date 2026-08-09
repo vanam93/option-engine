@@ -14,7 +14,7 @@ type Server struct {
 
 // NewServer creates an Intelligence API server facade.
 func NewServer(cfg Config, repo *Repository) (*Server, error) {
-	cfg = cfg.withDefaults()
+	cfg = cfg.WithDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

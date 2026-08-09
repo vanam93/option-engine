@@ -77,7 +77,7 @@ func BuildWalkForwardEngineConfig(cfg WalkForwardEngineConfig) (walkforward.Conf
 		ParallelWorkers:      cfg.ParallelWorkers,
 		MaxConcurrentRuns:    cfg.MaxConcurrentRuns,
 		Experiments:          cfg.Experiments,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return walkforward.Config{}, fmt.Errorf("walkforward config: %w", err)
 	}

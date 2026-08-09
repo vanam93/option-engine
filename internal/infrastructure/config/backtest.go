@@ -53,7 +53,7 @@ func BuildBacktestConfig(cfg BacktestConfig) (backtest.Config, error) {
 		EndTime:   end,
 		DataPath:  cfg.DataPath,
 		Timeframe: tf,
-	}
+	}.WithDefaults()
 	if err := out.Validate(); err != nil {
 		return backtest.Config{}, fmt.Errorf("backtest config: %w", err)
 	}
