@@ -2,7 +2,6 @@ package opportunity_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/vanam-gangireddy/option-engine/internal/opportunity"
@@ -49,7 +48,6 @@ func TestConfidenceCalculation(t *testing.T) {
 func TestRankingOrder(t *testing.T) {
 	scorer := opportunity.NewScorer(testConfig())
 	ranker := opportunity.NewRanker(testConfig())
-	at := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
 	platform := opportunity.PlatformState{WalkForwardScore: 0.5, MonteCarloScore: 0.5}
 
 	states := []opportunity.SymbolState{
